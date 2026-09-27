@@ -1,10 +1,5 @@
 # Hệ Thống Phân Bổ Sinh Viên - Giảng Viên Khóa Luận Tốt Nghiệp Bằng Học Tăng Cường (Reinforcement Learning)
 
-> **Đơn vị thực hiện:** Khoa Công nghệ Thông tin & Kinh tế số — Trường Đại học Kinh tế Quốc dân (FIT - NEU)  
-> **Đề tài:** Ứng dụng Học Tăng Cường trong Phân bổ Khóa Luận Tốt Nghiệp có Ràng buộc Dung lượng (Capacity-Constrained Student-Advisor Matching using Reinforcement Learning)  
-> **Sinh viên thực hiện:** Hoàng Văn Nam (MSV: 11236160)  
-> **Lộ trình:** 8 tuần thực thi (56 ngày tác chiến), bám sát 7 bước thiết kế hệ thống Machine Learning tiêu chuẩn  
-
 ---
 
 ## 1. Giới Thiệu Tổng Quan & Tính Cấp Thiết
@@ -119,37 +114,6 @@ Hệ thống được thiết kế theo kiến trúc module hóa phân tầng, t
      - Điểm tương thích trung bình $\ge 88\% - 92\%$ so với Cận trên lý thuyết Exact Hungarian và vượt trội so với Heuristic Greedy cơ sở.
 
 ---
-
-## 6. Lộ Trình 8 Tuần & Cấu Trúc 56 Nhiệm Vụ Hàng Ngày
-
-Dự án được phân rã thành 56 nhiệm vụ hàng ngày (tương ứng 56 tệp `KLTN-DAY-01.md` đến `KLTN-DAY-56.md` trong thư mục `/tasks`), phân bổ qua 8 chặng chiến lược:
-
-- **Tuần 1 (Ngày 01 – 07):** Thiết lập nền tảng, hoàn thiện toán học MDP và giải trình 6 câu hỏi nghiên cứu cốt lõi.
-- **Tuần 2 (Ngày 08 – 14):** Pipeline làm sạch dữ liệu, xử lý NLP tiếng Việt, chống rò rỉ TF-IDF và kiểm toán Data Contract.
-- **Tuần 3 (Ngày 15 – 21):** Xây dựng môi trường Gymnasium, tích hợp Action Masking, thiết kế hàm thưởng và kiểm thử Gym Env.
-- **Tuần 4 (Ngày 22 – 28):** Huấn luyện đa mô hình (Maskable PPO, DQN, QR-DQN, A2C) qua các mốc tích lũy và tinh chỉnh tham số.
-- **Tuần 5 (Ngày 29 – 35):** Benchmark đa thuật toán trên 5 hạt giống, kiểm định thống kê $p < 0.05$ và đánh giá tập Test set.
-- **Tuần 6 (Ngày 36 – 42):** Hiện thực Lifecycles V2–V3, khóa Promotion Gate, xuất 5 biểu đồ IEEE 300 DPI và triển khai Web Dashboard.
-- **Tuần 7 (Ngày 43 – 49):** Soạn thảo hoàn chỉnh bản thảo Khóa luận Tốt nghiệp 12 chương (100–120 trang) theo chuẩn NEU.
-- **Tuần 8 (Ngày 50 – 56):** Tiếp thu phản biện GVHD, thiết kế Slide, diễn tập thuyết trình, đóng gói Release và nộp KLTN chính thức.
-
----
-
-## 7. Nguyên Tắc Hoạt Động Dành Cho AI Coding Agent
-
-Khi tiếp nhận thực thi các nhiệm vụ trong repo này, AI Agent phải tuân thủ nghiêm ngặt các nguyên tắc:
-
-1. **Ranh giới hai tầng workspace:**
-   - Thư mục bên ngoài `C:\Su\KLTN` là workspace điều phối (chứa specs, adrs, planning, tasks, docs).
-   - Thư mục `C:\Su\KLTN\KLTN` là product repository duy nhất chứa toàn bộ mã nguồn sản phẩm, kiểm thử và tài nguyên triển khai.
-2. **Quy trình thực thi chuẩn:**
-   - Đọc kỹ tài liệu đặc tả và task tương ứng trước khi sửa đổi.
-   - Trình bày kế hoạch thực hiện ngắn gọn trước khi bắt tay viết mã.
-   - Toàn bộ mã nguồn phải có kiểm thử tự động đi kèm và chạy pass 100% locally trước khi nghiệm thu.
-   - Thông điệp commit tuân thủ quy chuẩn: `<TASK-ID>: <mô tả ngắn gọn công việc>`.
-3. **Tính trung thực trong nghiên cứu khoa học:**
-   - Không được giả lập hoặc bịa đặt các chỉ số thực nghiệm nếu chưa chạy thực tế.
-   - Mọi kết luận khoa học phải dựa trên bằng chứng dữ liệu và artifact lưu trữ thực tế từ quá trình huấn luyện và benchmark.
 
 ## 4. Các Vòng Đời Nghiệp Vụ Thực Tế (Lifecycles V1 – V4)
 

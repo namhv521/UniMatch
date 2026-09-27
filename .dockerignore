@@ -1,0 +1,19 @@
+# Allowlist: private data, credentials, caches and Git never enter context.
+**
+!Dockerfile
+!requirements.txt
+!src/
+!src/**
+!backend/
+!backend/app/
+!backend/app/**
+!frontend/
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/index.html
+!frontend/vite.config.js
+!frontend/src/
+!frontend/src/**
+**/__pycache__/
+**/*.pyc
+backend/app/static/

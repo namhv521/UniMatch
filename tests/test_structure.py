@@ -3,7 +3,6 @@ Basic structure tests for KLTN project.
 Validates repository layout and prerequisites for KLTN-DAY-01.
 """
 
-import os
 from pathlib import Path
 
 

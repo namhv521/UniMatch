@@ -27,7 +27,7 @@ def test_env_reset():
     """Test that environment reset works."""
     from src.environment import MatchingEnv
     env = MatchingEnv(n_students=10, n_advisors=5, max_quota=3)
-    obs, info = env.reset(seed=42)
+    obs, _info = env.reset(seed=42)
     assert obs.shape == (15,)  # 3*5
     print("✅ Environment reset successful")
 

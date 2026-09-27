@@ -66,7 +66,7 @@ $$I_{\text{invalid}}(a_t) = \begin{cases} 1 & \text{if } L_{t,a_t} \geq C_{a_t} 
 **Weights:**
 - $w_c = 1.0$ (primary objective)
 - $w_f = 0.15$ (fairness objective)
-- $w_p = 10.0$ (hard constraint)
+- $w_p = 2.0$ (invalid proposal penalty; capacity is enforced separately)
 
 ---
 
@@ -97,7 +97,7 @@ Long-term strategy over greedy decisions.
 
 - **Finite Horizon:** Episode ends at $t = N$
 - **Deterministic:** No stochasticity in transitions
-- **Markovian:** Current state sufficient for optimal action
+- **Observation limitation:** The 3M vector omits future cohort rows/time. For changing cohorts it is a partial observation of the full state (cohort, index, loads); it does not by itself prove the Markov property. A fixed cohort with known ordering admits a full finite-horizon MDP.
 - **Masked:** Hard constraints enforced structurally
 
 ---

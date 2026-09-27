@@ -1,163 +1,55 @@
-# Ghi Chú Kiến Trúc Hệ Thống — KLTN RL Matching System
+# Kiến trúc hệ thống phân bổ hướng dẫn
 
-**Ngày:** 26/09/2026 | **Phiên bản:** 1.0 | **Status:** Architecture Analysis Complete
+Cập nhật 27/09/2026. Tài liệu mô tả mã nguồn và kiểm chứng hiện có; không xem mục tiêu kế hoạch 56 ngày là kết quả đã đạt.
 
-## 1. Tổng Quan Dự Án
+## Luồng xử lý
 
-**Tiêu đề:** Hệ Thống Phân Bổ Sinh Viên – Giảng Viên Khóa Luận Tốt Nghiệp Bằng Học Tăng Cường
-
-**Mục tiêu:** Phát triển ứng dụng tối ưu hóa phân bổ ~200 sinh viên cho ~39 giảng viên, sử dụng Reinforcement Learning với Action Masking để:
-1. Tối đa hóa độ tương thích chuyên môn
-2. Tuân thủ 100% ràng buộc hard quota
-3. Cân bằng tải công bằng (Fairness)
-
-**Lộ trình:** 56 ngày (8 tuần: 21/09 – 15/11/2026)
-
----
-
-## 2. Kiến Trúc 3 Tầng
-
-```
-Layer 3: React/Vite Web Dashboard (Interactive UI)
-        ↓ REST API (FastAPI)
-Layer 2: FastAPI Inference Backend (/api/v1/allocate, /recommend)
-        ↓ Model Artifacts
-Layer 1: Python ML Pipeline (Data processing, RL training, Benchmark)
+```mermaid
+flowchart LR
+    A[PDF / DOCX / RAR] --> B[Trích xuất văn bản]
+    B --> C[LLM và đối chiếu bằng chứng]
+    D[Hồ sơ FIT-NEU và công bố] --> C
+    C --> E[Curated và kiểm duyệt]
+    E --> F[Chia theo năm và mã sinh viên]
+    F --> G[TF-IDF fit trên train]
+    G --> H[Ma trận tương thích]
+    H --> I[Baseline / môi trường RL]
+    H --> J[FastAPI]
+    J --> K[React / Vite]
 ```
 
----
+`data/1.pdfs` giữ nguyên nguồn. `data/extracted` chứa văn bản, cache LLM và bằng chứng; `data/cache/fit` giữ kết quả crawl. `data/curated` chứa hồ sơ chuẩn hóa và báo cáo curation. Cache giúp nối tiếp khi provider giới hạn quota. Không ghi khóa API vào output hoặc image.
 
-## 3. MDP Formulation
+Nguồn hiện có 220 tài liệu duy nhất được trích xuất văn bản và 38 hồ sơ giảng viên công khai. Các số 198 sinh viên, 39 giảng viên là giả định ban đầu, không phải số lượng bắt buộc. Số hồ sơ sinh viên chuẩn hóa còn tăng khi trích xuất LLM; báo cáo curation hiện tại là nguồn chuẩn.
 
-**State Space:** Vector 3×39 = 117 chiều
-- Compatibility scores sinh viên t với 39 giảng viên
-- Remaining capacity ratio (0.0–1.0)
-- Current load ratio (0.0–1.0)
+## Đặc trưng và phân chia dữ liệu
 
-**Action Space:** {0, 1, ..., 38} — gán sinh viên cho GV j
+Sinh viên có tiêu đề, lĩnh vực, nhóm ngôn ngữ/framework/database/AI, phương pháp nghiên cứu và vai trò kỹ thuật. Giảng viên có học hàm/học vị, lĩnh vực, học phần, công bố và kỹ năng. Kỹ năng suy luận từ tiêu đề được phân biệt với bằng chứng trực tiếp. Người kê khai công bố không mặc nhiên là tác giả đã xác thực.
 
-**Reward Function:**
-```
-r_t = w_comp × comp(t, a_t) + w_fair × ΔVar_t - w_pen × I_invalid
-```
+`dataset.py` kiểm tra danh tính, yêu cầu train/validation/test không rỗng, fit TF-IDF trên train rồi tính cosine similarity trong [0,1]. Chia theo năm và nhóm mã sinh viên; hồ sơ sau 2025 được giữ riêng trong thiết kế cohort hiện tại. Hồ sơ giảng viên hiện hành có thể chứa bằng chứng sau cohort; phải kiểm toán thời điểm trước khi kết luận đánh giá lịch sử không rò rỉ.
 
-**Action Masking:** Logit của GV đầy quota → -∞ ⟹ P(invalid) = 0
+## Môi trường và thuật toán
 
----
+`GymMatchingEnv` nhận ma trận N×M và quota. Quan sát `[scores, remaining_capacity_ratio, current_load_ratio]` có 3M chiều; 117 chiều chỉ khi M=39. Quan sát chưa chứa toàn bộ thông tin sinh viên còn lại nên không tự bảo đảm tính Markov cho mọi biến thể nghiệp vụ.
 
-## 4. Technology Stack
+Reward hợp lệ dùng tương thích và mức giảm phương sai tải. Hành động không hợp lệ nhận phạt, không bỏ qua sinh viên; giới hạn số đề xuất ngăn episode chạy vô hạn. Maskable PPO dùng mask theo quota còn lại; DQN, QR-DQN, A2C không mặc nhiên có bảo đảm tương đương.
 
-**Backend ML (Python 3.10+):**
-- gymnasium, stable-baselines3, sb3-contrib (RL algorithms)
-- scikit-learn (TF-IDF), sentence-transformers (embeddings)
-- scipy (Hungarian algorithm), numpy, pandas
+Baseline gồm Hungarian theo slot quota, greedy, random và SPA. Hungarian tối ưu tổng tương thích với quota trong bài toán cộng tuyến tính, không chứng minh tối ưu reward có fairness. API không tự thay yêu cầu PPO bằng baseline khi checkpoint chưa được xác thực.
 
-**FastAPI Backend:**
-- fastapi, pydantic, sqlalchemy, uvicorn
+## API và giao diện
 
-**Frontend:**
-- React 18+, Vite, TypeScript, TailwindCSS, Plotly.React
+FastAPI ở `backend/app`; React 18/Vite và CSS native ở `frontend`. Build vào `backend/app/static`, phục vụ cùng origin. Bản hiện tại không cần TypeScript, Tailwind, Plotly hoặc SQL.
 
-**DevOps:**
-- Docker, Docker Compose, GitHub Actions (CI/CD)
+UI gọi health/faculty/allocate; cho chọn train/validation, thuật toán có sẵn và quota. Bảng hiển thị sinh viên, đề tài, giảng viên, tương thích; tải hướng dẫn lấy từ API. Có trạng thái loading, thiếu dữ liệu, lỗi, rỗng và partial.
 
----
+Mặc định chặn dữ liệu chưa hoàn tất. `KLTN_ALLOW_PARTIAL=1` chỉ mở chế độ kiểm tra vận hành và gắn `partial_data`. Holdout bị khóa khi chọn mô hình; PPO không có checkpoint production trả lỗi rõ ràng. Dịch vụ chưa có lớp xác thực nên chỉ dùng loopback, không công bố Internet.
 
-## 5. Dữ Liệu & Validation
+## Đóng gói và kiểm chứng
 
-**Curated Data:**
-- 198 đề tài (students) + 39 giảng viên
-- Compatibility matrix: 198×39, values ∈ [0.0, 1.0]
-- Temporal split: pre-2025 + 75% 2025 → train; 12.5% val; 12.5% test
-- **Critical:** Group by student_id, TF-IDF fit on train only
+Docker có stage Node build UI và stage Python CPU chạy API bằng user không phải root. Context allowlist không chứa `.env`, data hoặc outputs. Compose mount data/outputs tách biệt chỉ đọc, bind host `127.0.0.1:8000`, filesystem container chỉ đọc. API đọc benchmark từ outputs; không tạo thí nghiệm mới trong container.
 
-**Hard Constraints:**
-- Quota violations = 0 (tuyệt đối)
-- Invalid proposals = 0 (với Maskable PPO)
-- No data leakage
+Đã build frontend và kiểm tra Playwright với API thật: 38 giảng viên, snapshot partial, một sinh viên validation, không vượt quota, không lỗi JavaScript hoặc tràn trang desktop/mobile. Đây là kiểm chứng tích hợp, không phải chất lượng mô hình. PPO smoke 20.224 bước trên dữ liệu partial cũng chỉ chứng minh đường chạy.
 
----
+Còn phải hoàn tất kiểm duyệt, full training nhiều seed, benchmark/ablation, thống kê, đóng băng lựa chọn và đánh giá holdout trước khi công bố kết luận RL. Chưa xác nhận Docker build/run vì daemon không hoạt động khi kiểm tra.
 
-## 6. RL Algorithms
-
-| Algorithm | Family | Primary? | Masking |
-|-----------|--------|----------|---------|
-| **Maskable PPO** | Policy Gradient | ✅ YES | ✅ Built-in |
-| DQN | Value-based | Baseline | ❌ No |
-| QR-DQN | Distributional | Comparison | ❌ No |
-| A2C | Actor-Critic | Comparison | ❌ No |
-
----
-
-## 7. Lộ Trình 56 Ngày
-
-| Tuần | Ngày | Giai Đoạn | Sản Phẩm Chính |
-|------|------|----------|---|
-| 1 | 01–07 | Problem Formulation | MDP spec, Hungarian baseline |
-| 2 | 08–14 | Data & NLP Pipeline | Curated data, compatibility matrix |
-| 3 | 15–21 | RL Environment | GymMatchingEnv, reward function |
-| 4 | 22–28 | RL Training | Checkpoints @ 200k–2M steps |
-| 5 | 29–35 | Benchmark & Stats | 5 seeds, t-test, IEEE charts |
-| 6 | 36–42 | Lifecycles V2–V3 | Preferences, streaming, Promotion Gate |
-| 7 | 43–49 | Thesis Writing | 12 chapters (100–120 pages) |
-| 8 | 50–56 | Final Delivery | Slides, defense, submission |
-
----
-
-## 8. Repo Structure
-
-```
-C:\Su\KLTN\KLTN\
-├── data/1.pdfs/              # Raw PDFs (FIT-NEU source)
-├── src/                       # ML Pipeline (tạo ngày 02–14)
-│   ├── data_pipeline/         # NLP, feature extraction
-│   ├── environment/           # Gymnasium env
-│   └── models/                # RL implementations
-├── backend/                   # FastAPI (ngày 09–10)
-├── frontend/                  # React/Vite (ngày 10)
-├── configs/                   # YAML configs
-├── tests/                     # Unit/integration tests
-├── eval/                      # Benchmark scripts
-├── outputs/                   # Checkpoints, results, figures
-├── docs/                      # Technical docs
-├── baocao/                    # Thesis report
-├── presentation/              # Slides
-├── Dockerfile                 # Container
-├── docker-compose.yml
-├── .env.example
-└── .github/workflows/         # CI/CD
-```
-
----
-
-## 9. Ràng Buộc & Tiêu Chí
-
-**Hard Requirements:**
-- Quota violations = 0
-- Invalid proposals = 0 (Maskable PPO)
-- Zero data leakage (temporal split)
-
-**Soft Targets:**
-- Mean compatibility ≥ 88% vs Hungarian
-- Load variance: minimized
-- Training convergence: < 2M steps
-- Inference: < 100ms per allocation
-
----
-
-## 10. Next Steps (KLTN-DAY-02 onwards)
-
-1. **DAY-02-05:** Data processing, NLP, TF-IDF
-2. **DAY-06-07:** Week 1 review, Hungarian baseline
-3. **DAY-08-14:** Feature engineering, data validation
-4. **DAY-15-21:** Gymnasium environment, masking
-5. **DAY-22-28:** RL training, hyperparameter tuning
-6. **DAY-29-35:** Benchmark, evaluation, statistical tests
-7. **DAY-36-42:** Dashboard, API, promotion gate
-8. **DAY-43-49:** Thesis chapters
-9. **DAY-50-56:** Defense prep, final submission
-
----
-
-**Generated:** KLTN-DAY-01 (Environment Setup & Analysis)  
-**Status:** Architecture Overview Complete ✅
+Hướng dẫn: [local_run.md](local_run.md).
