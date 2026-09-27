@@ -1,0 +1,6 @@
+backend: local_numpy
+collection: kltn_entities_2026_09_28
+path: data/vector/kltn_entities_2026_09_28
+distance: cosine
+canonical_source: data/curated
+metadata_filters: [entity_type, dataset_version, tech_id]
