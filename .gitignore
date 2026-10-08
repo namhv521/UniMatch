@@ -1,20 +1,45 @@
+# Credentials and local configuration
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.p12
+
+# Private source data and generated ML artifacts
+data/
+outputs/
+baocao/**/*.pdf
+baocao/**/*.docx
+backups/
+*.dump
+
+# Python
 .venv*/
 __pycache__/
 *.py[cod]
 .pytest_cache/
-outputs/
-data/
-!data/README.md
-node_modules/
-dist/
-*.log
-.cache/
-*.egg-info/
 .ruff_cache/
-docs/
-baocao/
-configs/
-tests/
+.mypy_cache/
+*.egg-info/
+coverage.xml
+.coverage
+htmlcov/
+
+# Frontend and QA output
+node_modules/
+frontend/dist/
+backend/app/static/
+frontend/qa-artifacts/
+playwright-report/
+test-results/
+
+# Local runtime and editor files
+*.log
+debug.log
+.cache/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+.superpowers/sdd/

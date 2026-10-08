@@ -1,10 +1,31 @@
 services:
-  dashboard:
-    build: .
-    ports:
-      - "127.0.0.1:8000:8000"
+  postgres:
+    image: postgres:16-alpine
     environment:
-      KLTN_ALLOW_PARTIAL: "${KLTN_ALLOW_PARTIAL:-0}"
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: .
+      target: runtime
+    ports:
+      - "127.0.0.1:${KLTN_WEB_PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      KLTN_LOGIN_EMAIL: ${KLTN_LOGIN_EMAIL:?Set KLTN_LOGIN_EMAIL in .env}
+      KLTN_LOGIN_PASSWORD: ${KLTN_LOGIN_PASSWORD:?Set KLTN_LOGIN_PASSWORD in .env}
+      KLTN_COOKIE_SECURE: "false"
+      KLTN_ALLOWED_ORIGIN: http://127.0.0.1:${KLTN_WEB_PORT:-8000}
     volumes:
       - type: bind
         source: ./data
@@ -13,7 +34,9 @@ services:
       - type: bind
         source: ./outputs
         target: /app/outputs
-        read_only: true
+    depends_on:
+      postgres:
+        condition: service_healthy
     read_only: true
     tmpfs:
       - /tmp
@@ -21,3 +44,35 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    restart: unless-stopped
+
+  train:
+    profiles: ["train"]
+    build:
+      context: .
+      target: runtime
+    command: ["python", "scripts/train_real_rl.py"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
+    volumes:
+      - type: bind
+        source: ./data
+        target: /app/data
+        read_only: true
+      - type: bind
+        source: ./outputs
+        target: /app/outputs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: "no"
+
+volumes:
+  postgres-data:

@@ -1,19 +1,31 @@
-# Allowlist: private data, credentials, caches and Git never enter context.
+# Deny by default so private datasets, model outputs, credentials, and Git
+# history never enter the Docker build context.
 **
 !Dockerfile
 !requirements.txt
+!run_dashboard.py
 !src/
 !src/**
 !backend/
-!backend/app/
-!backend/app/**
+!backend/**
+!scripts/
+!scripts/**
+!database/
+!database/**
+!configs/
+!configs/**
 !frontend/
 !frontend/package.json
-!frontend/package-lock.json
+!frontend/build.mjs
 !frontend/index.html
-!frontend/vite.config.js
-!frontend/src/
-!frontend/src/**
+!frontend/style.css
+!frontend/app.js
+!frontend/visualization.js
+
 **/__pycache__/
-**/*.pyc
+**/*.py[cod]
+**/.pytest_cache/
+**/*.log
+**/.env
+**/.env.*
 backend/app/static/

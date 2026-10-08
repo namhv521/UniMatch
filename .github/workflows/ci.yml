@@ -1,0 +1,33 @@
+name: verify
+on: [push, pull_request]
+jobs:
+  public-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: pip install -r requirements.txt
+      - run: python -m pytest tests/domain tests/environment tests/baselines tests/evaluation/test_benchmark_contract.py tests/evaluation/test_release_manifest.py tests/security/test_public_api.py -q -p no:cacheprovider
+      - run: python scripts/train_maskable_ppo.py --smoke --output-dir outputs/ci-smoke
+      - run: npm --prefix frontend test
+      - run: npm --prefix frontend run build
+      - run: python -m compileall -q src backend scripts run_dashboard.py
+      - run: python scripts/verify_release.py
+      - run: docker build -t kltn-ci .
+      - name: Container clean-checkout health (private data intentionally absent)
+        run: |
+          docker run -d --name kltn-ci -p 127.0.0.1:8000:8000 -e KLTN_LOGIN_EMAIL=ci@example.test -e KLTN_LOGIN_PASSWORD=public-fixture-not-production kltn-ci
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/api/v1/health; then break; fi
+            sleep 1
+          done
+          python -c "import json,urllib.request; h=json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')); assert h['status']=='degraded' and h['data_loaded'] is False"
+      - if: always()
+        run: docker rm -f kltn-ci || true
+  # Private data, full-budget multi-seed experiments and authenticated live
+  # integration are verified locally; public CI does not invent those artifacts.

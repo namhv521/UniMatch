@@ -1,1 +1,11 @@
-{"name":"kltn-allocation-console","private":true,"version":"1.0.0","type":"module","scripts":{"dev":"vite --host 127.0.0.1","build":"vite build"},"dependencies":{"react":"^18.3.1","react-dom":"^18.3.1"},"devDependencies":{"vite":"^6.1.0"}}
+{
+  "name": "unimatch-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check app.js && node --check visualization.js && node --check build.mjs",
+    "test": "node --test visualization.test.js",
+    "build": "node build.mjs",
+    "qa:browser": "python qa_browser.py"
+  }
+}
