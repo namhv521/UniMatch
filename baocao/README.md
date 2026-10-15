@@ -39,3 +39,11 @@ Tài liệu hỗ trợ:
 
 Các số liệu trong Chương 11 lấy từ `outputs/benchmarks/current-validation.json`: snapshot 215×38, split 154/20/21/20, 35 dòng kết quả và 24 checkpoint đã được kiểm tra. Sáu RL đã được hiện thực nhưng chỉ DQN, MaskablePPO và QR-DQN đủ năm seed × 2 triệu bước; không candidate nào được promote. Hungarian là engine được chọn. Kết quả 220×38 chỉ còn giá trị lịch sử và được lưu riêng.
 
+
+## Bản hoàn thiện ngày 16/10/2026
+
+Bản hợp nhất theo bố cục bốn chương ở [khoa_luan_20261016.md](khoa_luan_20261016.md). Bản Word và PDF local nằm trong `exports/11236160_HoangVanNam_KhoaLuan_UniMatch_hoan_thien.*`. Bản gốc được giữ nguyên.
+
+Đã tham khảo cấu trúc ba báo cáo trong `data/1.pdfs` và đối chiếu quy định chính thức của FIT NEU. Word dùng A4, Times New Roman 13, giãn dòng 1,3, lề trái 3,5 cm; các lề còn lại 2,5 cm. Mục lục/danh mục/số trang và tham khảo đã cập nhật bằng field Word, rồi xuất PDF để kiểm tra. Còn cần thông tin GVHD, lớp, kỳ/năm học, chữ ký và Turnitin từ nguồn chính thức trước khi nộp.
+
+Bản Word/PDF cuối: 81 trang; nội dung chính 64 trang (PDF trang 14–77), không có field tham chiếu lỗi. Đã thay ảnh landing, matching và ping bằng ảnh Chrome từ topology hiện hành. Mục lục và danh mục hình đã refresh trong Word.

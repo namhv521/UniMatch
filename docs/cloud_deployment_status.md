@@ -1,50 +1,51 @@
-# Triển khai UniMatch ngày 16 tháng 10 năm 2026
+# UniMatch đã triển khai
 
-## Các project mới
+Cập nhật ngày 16/10/2026. Mã nguồn frontend, backend, database schema và lịch ping nằm trong [namhv521/UniMatch](https://github.com/namhv521/UniMatch).
 
-| Thành phần | Project hoặc service | Địa chỉ |
+| Thành phần | Project | Địa chỉ |
 |---|---|---|
-| Frontend Vercel | unimatch-web-20261016 | https://unimatch-web-20261016.vercel.app |
-| Backend Render Free | UniMatch API 20261016 / unimatch-api-20261016 | https://unimatch-api-20261016.onrender.com |
-| Database Neon Free | unimatch-db-20261016 | https://console.neon.tech/app/projects/gentle-math-08514391 |
-| Source deployment private | unimatch-deploy-20261016 | https://github.com/namhv521/unimatch-deploy-20261016 |
-| Lịch ping public | unimatch-uptime-20261016 | https://github.com/namhv521/unimatch-uptime-20261016/actions |
+| Frontend | Vercel `unimatch` | https://unimatch-neu.vercel.app |
+| Backend | Render `unimatch-api-20261016` | https://unimatch-api-20261016.onrender.com/api/v1/health |
+| Database mới | Neon `unimatch`, Singapore | Project `patient-tree-18935199` |
+| Ping | GitHub Actions cùng repo | `.github/workflows/keepalive.yml` |
 
-Các project được tạo mới trong phiên triển khai; không tái sử dụng service hoặc database của dự án khác. Render và Neon cùng region Singapore. Backend dùng Python 3.12.12, CPU PyTorch và một Uvicorn worker. Vercel chỉ xuất bản năm file frontend build; API được rewrite sang Render.
+Tên `unimatch.vercel.app` đã thuộc project khác. Project đã đổi tên thành `unimatch`; domain chính là `unimatch-neu.vercel.app`. Domain `unimatch-web-20261016.vercel.app` chuyển hướng 307 sang domain chính.
 
-## Kết quả kiểm chứng
+## Hợp đồng triển khai
 
-- Health trực tiếp và qua Vercel: `data_loaded=true`, `quality_ready=true`, 38 giảng viên.
-- Đăng nhập và đọc session qua domain Vercel thành công; cookie có HttpOnly, Secure, SameSite=Strict.
-- Request ghi từ origin không được phép bị từ chối HTTP 403; catalog chưa đăng nhập trả 401.
-- Hungarian trên real-train trả 154 assignment, không vi phạm quota.
-- Recommendation, benchmark summary và tải workbook ba sheet thành công.
-- Workbook khảo sát tổng hợp 38 SV phân bổ cho bốn GV có tải 10–10–9–9, không vi phạm quota.
-- MaskablePPO sample trả ba assignment; MaskablePPO research trên real-validation trả 20 assignment. Đây là kiểm tra inference, không phải bằng chứng promote model.
-- Neon lưu 1 snapshot, 215 students, 38 advisors và 215 split memberships. Lịch sử tăng sau các lượt chạy; mốc kiểm chứng có ít nhất 5 simulation_runs và 1 feedback.
-- Bộ kiểm tra liên quan tại source: 84 passed, 1 skipped; frontend 13 passed và build thành công.
-- Bản checkout Git đã kiểm tra lại 92 artifact giữ nguyên byte và nạp MatchingService thành công.
+Vercel dùng root `frontend`, chạy `npm ci` và `npm run build`, xuất thư mục `dist`. `frontend/vercel.json` rewrite `/api/*` tới Render. Three.js 0.186.1 được self-host; không gọi CDN thư viện hoặc dịch vụ font khi sử dụng.
 
-Kết quả chi tiết không chứa credential: `outputs/deployment/unimatch-20261016.verification.json`.
+Render dùng Python 3.12.12, một worker; build bằng CPU PyTorch và `requirements.txt`. Start:
 
-## Lịch ping
+```sh
+python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT --workers 1
+```
 
-Workflow `.github/workflows/keepalive.yml` trong repo uptime gọi health Render theo lịch `*/5 * * * *`. Lần chạy thủ công [38791428637](https://github.com/namhv521/unimatch-uptime-20261016/actions/runs/38791428637) thành công trong ba giây. Tại thời điểm ghi nhận này chưa xác minh lượt kích hoạt bằng schedule tự động.
+Biến môi trường: `DATABASE_URL` (URI Neon có TLS), `KLTN_ARTIFACT_BUNDLE=unimatch-20261016-v1`, `KLTN_LOGIN_EMAIL`, `KLTN_LOGIN_PASSWORD`, `KLTN_COOKIE_SECURE=true`, `KLTN_DATABASE_SCHEMA=public`. `KLTN_ALLOWED_ORIGIN` chứa domain chính và domain cũ, phân tách bằng dấu phẩy. Sau thay đổi Origin cần deploy/restart áp dụng cấu hình, rồi thử login thật; tên project không tự cập nhật danh sách Origin.
 
-Người dùng đã chọn GitHub Actions và chấp nhận lịch có thể trễ. GitHub có thể vô hiệu schedule của repo public sau thời gian không có hoạt động; cần theo dõi Actions. Ping không bảo đảm uptime hay ngăn restart/giới hạn quota Render. Timer trong backend không được dùng vì sẽ dừng cùng instance đang sleep.
+Không đưa credential, PDF nguồn, hồ sơ hoặc checkpoint vào Git công khai. Bảng `serving_artifacts` giữ bundle inference: 92 file, 6.612.229 byte. `scripts/upload_serving_artifacts.py` tải một phiên bản bất biến lên database khi quản trị viên đã đặt `DATABASE_URL`; `backend/app/artifacts.py` kiểm allowlist đường dẫn và toàn bộ SHA-256 trước khi ghi file. Bundle sai hoặc thiếu khiến khởi động thất bại. MatchingService còn kiểm dimension, split và mapping.
 
-## Quản lý source và secret
+## Kết quả mới nhất
 
-Bản triển khai độc lập nằm ở `C:\Su\KLTNv2\deployments\unimatch-20261016`. Repo nguồn công khai không được đưa dữ liệu private lên. `.gitattributes` của deployment giữ nguyên byte dưới `data/`, `outputs/`, `assets/` để tránh CRLF/LF làm sai hash.
+- 197 test Python pass, 1 skipped, 1 warning; 16 test frontend pass; syntax/build pass.
+- Health trực tiếp và qua Vercel: healthy, data_loaded=true, quality_ready=true, 38 GV.
+- Catalog chưa đăng nhập bị 401; login/session 200; cookie HttpOnly, Secure, SameSite=Strict; Origin ngoài allowlist bị 403.
+- Hungarian sample: 3 assignment; real-train: 154; validation: 20; quota violations bằng 0.
+- MaskablePPO mẫu: 3 assignment; nghiên cứu validation: 20. Kết quả inference không phải bằng chứng promote RL.
+- Workbook template có ba sheet. Workbook tổng hợp 38 SV không cần đề tài phân bổ cho bốn GV với quota 10–10–9–9. Assignment đã đọc lại đúng từ PostgreSQL.
+- Neon mới: 1 snapshot, 215 students, 38 advisors, 215 split memberships, 92 artifact. Mốc kiểm chứng có 11 simulation_runs và 2 feedback; số đếm tăng khi sử dụng.
+- Checkout sạch khôi phục đủ 92 artifact từ Neon và nạp được 38 GV.
 
-Tài khoản đăng nhập ứng dụng dùng email `admin@unimatch.local`. Mật khẩu ngẫu nhiên và URI database được giữ ở file local bị Git bỏ qua: `outputs/deployment/unimatch-20261016.credentials.json`. Không gửi file này vào repo, báo cáo hoặc ảnh chụp màn hình.
+Bằng chứng chi tiết, không chứa credential: `outputs/deployment/unimatch-release.verification.json`. Credential cục bộ nằm ở `outputs/deployment/unimatch-release.credentials.json`, bị Git bỏ qua.
 
-Session ở RAM nên restart/redeploy/sleep có thể yêu cầu đăng nhập lại. PostgreSQL giữ snapshot và lịch sử; đây không phải session store. Chưa có bằng chứng tải đồng thời, uptime dài hạn hoặc đầy đủ benchmark trên toàn bộ model cloud.
+## Đồ họa
 
-## Landing page và kiểm chứng cuối
+Landing dùng WebGL: hai cụm hồ sơ dạng nhân vật, bệ 3D, quỹ đạo, đường cong có hạt sáng và parallax. Đây là minh họa cơ chế kết nối. Matching dùng trace thật: sinh viên đi đến nhóm giảng viên, cột tải tăng theo assignment duy nhất và đường hiện hành được nhấn mạnh. Có xoay/zoom, chọn cột, điều khiển bàn phím, replay, reset, reduced motion và fallback Canvas. Chuyển route thu hồi tài nguyên GPU.
 
-Commit deployment `8facd6b` bổ sung landing đầu tiên sau đăng nhập: xanh lấy cảm hứng từ NEU, đồ thị hai phía chiếu phối cảnh 3D, nhãn hồ sơ minh họa, nút dừng/bật chuyển động và lối vào nhập sinh viên/mô phỏng. Đồ họa minh họa không đại diện kết quả phân bổ. Font Manrope được self-host kèm giấy phép OFL, không thêm package frontend.
+## Ping và giới hạn
 
-Đã kiểm tra trên Chrome ở desktop và mobile 390 px: không tràn ngang, prefers-reduced-motion tạo cảnh tĩnh, nút bật/dừng thay đổi trạng thái, điều hướng vào matching chạy 154 assignment. Syntax check, 13 test frontend và build đều pass sau thay đổi cuối. Lượt HTTP xác nhận lại login/catalog 200 và Hungarian 154 assignment, quota violations 0 được lưu ở `outputs/deployment/final-cloud-check.json`.
+Workflow trong UniMatch gọi Render mỗi năm phút và kiểm `data_loaded=true`, có retry và timeout. Timer trong backend không được dùng vì timer cũng dừng khi instance sleep. GitHub Actions có thể chậm hoặc vô hiệu lịch sau thời gian không hoạt động; Render Free có thể restart hoặc hết quota. Ping không phải SLA, không bảo đảm luôn thức. Xem [Render Free](https://render.com/docs/free) và [GitHub schedule](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
 
-Khóa luận Word được tạo mới từ mẫu NEU, cập nhật kiến trúc, benchmark và triển khai; file gốc đề xuất không bị ghi đè. Bản đầy đủ ở `baocao/exports/11236160_HoangVanNam_KhoaLuan_UniMatch.docx`; thông tin giảng viên, lớp, chữ ký và Turnitin cần người viết bổ sung dữ liệu chính thức.
+Session ở RAM có thể mất sau restart. Chưa kiểm tải đồng thời dài hạn, uptime dài hạn hoặc phê duyệt nghiệp vụ học vụ.
+
+Lượt ping thủ công trong UniMatch đã thành công: [38810602340](https://github.com/namhv521/UniMatch/actions/runs/38810602340), job chạy bốn giây. Lịch năm phút đã cấu hình; đây không phải bằng chứng uptime dài hạn.
