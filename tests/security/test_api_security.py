@@ -98,48 +98,47 @@ def test_cross_origin_writes_are_rejected(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_authenticated_api_contract_and_privacy(monkeypatch, tmp_path: Path) -> None:
-    client = _client(monkeypatch, tmp_path)
-    _login(client)
+    with _client(monkeypatch, tmp_path) as client:
+        _login(client)
 
-    catalog = client.get("/api/v1/catalog")
-    dataset = client.get("/api/v1/datasets/real-validation")
-    simulated = client.post(
-        "/api/v1/simulate",
-        headers={"Origin": ORIGIN},
-        json={"mode": "semantic", "algorithm": "hungarian", "dataset": "real-validation", "seed": 42},
-    )
-    recommended = client.post(
-        "/api/v1/recommend",
-        headers={"Origin": ORIGIN},
-        json={"title": "Xử lý ngôn ngữ tự nhiên", "top_k": 3},
-    )
+        catalog = client.get("/api/v1/catalog")
+        dataset = client.get("/api/v1/datasets/real-validation")
+        simulated = client.post(
+            "/api/v1/simulate",
+            headers={"Origin": ORIGIN},
+            json={"mode": "semantic", "algorithm": "hungarian", "dataset": "real-validation", "seed": 42},
+        )
+        recommended = client.post(
+            "/api/v1/recommend",
+            headers={"Origin": ORIGIN},
+            json={"title": "Xử lý ngôn ngữ tự nhiên", "top_k": 3},
+        )
 
-    assert catalog.status_code == dataset.status_code == simulated.status_code == recommended.status_code == 200
-    assert catalog.json()["status"] == "success"
-    assert {item["id"] for item in catalog.json()["data"]["datasets"]} >= {
-        "real-train", "real-validation",
-    }
-    assert "real-test" not in {item["id"] for item in catalog.json()["data"]["datasets"]}
-    assert client.get("/api/v1/datasets/real-test").status_code == 400
-    assert simulated.json()["data"]["events"][0].keys() >= {
-        "step", "student_id", "advisor_id", "student_index", "advisor_index", "score", "reward",
-        "loads_before", "loads_after", "capacities", "invalid_proposal", "fallback", "explanation",
-    }
-    body = json.dumps([catalog.json(), dataset.json(), simulated.json(), recommended.json()], ensure_ascii=False)
-    assert "11181231" not in body
-    assert "C:\\" not in body
-    assert "http" not in body.lower()
+        assert catalog.status_code == dataset.status_code == simulated.status_code == recommended.status_code == 200
+        assert catalog.json()["status"] == "success"
+        assert {item["id"] for item in catalog.json()["data"]["datasets"]} >= {
+            "real-train", "real-validation",
+        }
+        assert "real-test" not in {item["id"] for item in catalog.json()["data"]["datasets"]}
+        assert client.get("/api/v1/datasets/real-test").status_code == 400
+        assert simulated.json()["data"]["events"][0].keys() >= {
+            "step", "student_id", "advisor_id", "student_index", "advisor_index", "score", "reward",
+            "loads_before", "loads_after", "capacities", "invalid_proposal", "fallback", "explanation",
+        }
+        body = json.dumps([catalog.json(), dataset.json(), simulated.json(), recommended.json()], ensure_ascii=False)
+        assert "11181231" not in body
+        assert "C:\\" not in body
+        assert "http" not in body.lower()
 
 
 def test_feedback_is_bounded_structured_data(monkeypatch, tmp_path: Path) -> None:
-    client = _client(monkeypatch, tmp_path)
-    _login(client)
-
-    response = client.post(
-        "/api/v1/feedback",
-        headers={"Origin": ORIGIN},
-        json={"mode": "semantic", "algorithm": "greedy", "helpful": True},
-    )
+    with _client(monkeypatch, tmp_path) as client:
+        _login(client)
+        response = client.post(
+            "/api/v1/feedback",
+            headers={"Origin": ORIGIN},
+            json={"mode": "semantic", "algorithm": "greedy", "helpful": True},
+        )
 
     assert response.status_code == 200
     assert response.json()["data"]["stored"] is True
@@ -208,3 +207,18 @@ def test_validation_errors_do_not_leak_input_or_paths(monkeypatch, tmp_path: Pat
     body = response.text
     assert secret not in body
     assert str(ROOT) not in body
+
+
+def test_current_benchmark_exposes_compact_seed_rows(monkeypatch, tmp_path: Path) -> None:
+    client = _client(monkeypatch, tmp_path)
+    _login(client)
+    response = client.get("/api/v1/results/summary")
+    assert response.status_code == 200
+    report = response.json()["data"]
+    assert report["rows"]
+    assert all(set(row) <= {"algorithm", "seed", "metrics"} for row in report["rows"])
+    assert all("assignments" not in row for row in report["rows"])
+    datasets = client.get("/api/v1/catalog").json()["data"]["datasets"]
+    train = next(item for item in datasets if item["id"] == "real-train")
+    assert train["students"] == len(client.get("/api/v1/datasets/real-train").json()["data"]["students"])
+    assert train["advisors"] == 38

@@ -162,20 +162,28 @@ class MatchingService:
                 for path, digest in quality['input_files'].items()
             )
             quality = {**quality, 'ready': bool(quality.get('ready')) and fresh}
+        models = self.registry.catalog()
+        def has_models(*, research: bool) -> bool:
+            return any(
+                model['status'] != 'invalid' and not model['smoke']
+                and model['research'] is research and model['supported_datasets']
+                for model in models
+            )
+
         return {
             "datasets": [
                 {"id": "sample-2x2", "sample": True},
                 {"id": "sample-3x2", "sample": True},
-                {"id": "real-train", "sample": False, "capacity_policy": CAPACITY_POLICY},
-                {"id": "real-validation", "sample": False, "capacity_policy": CAPACITY_POLICY},
+                {"id": "real-train", "sample": False, "students": len(self.split["indices"]["train"]), "advisors": len(self.advisors), "capacity_policy": CAPACITY_POLICY},
+                {"id": "real-validation", "sample": False, "students": len(self.split["indices"]["validation"]), "advisors": len(self.advisors), "capacity_policy": CAPACITY_POLICY},
             ],
-            "models": self.registry.catalog(),
+            "models": models,
             "baselines": ["hungarian", "greedy", "random"],
             "modes": [
                 {"id": "semantic", "available": True},
                 {"id": "non_rl", "available": False, "reason": "trained non-RL artifact is missing"},
-                {"id": "rl", "available": True, "scope": "toy samples only; unpromoted"},
-                {"id": "rl_research", "available": False, "scope": "explicit unpromoted real-data research only"},
+                {"id": "rl", "available": has_models(research=False), "scope": "toy samples only; unpromoted"},
+                {"id": "rl_research", "available": has_models(research=True), "scope": "explicit unpromoted real-data research only"},
             ],
             "quality": {"ready": bool(quality.get("ready")), "scope": quality.get("scope", "unverified")},
         }

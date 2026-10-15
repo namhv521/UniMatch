@@ -37,6 +37,31 @@ Invoke-RestMethod http://127.0.0.1:8000/api/v1/health
 
 Phản hồi cần có `data_loaded=true` và `total_advisors=38`. `status=degraded` là cảnh báo có chủ đích khi quality gate hoặc bằng chứng release chưa đầy đủ; không được đổi thành `healthy` chỉ để qua demo. Health endpoint không chứng minh benchmark/model đã được promotion; xem catalog sau khi đăng nhập.
 
+## Database local
+
+Khi không đặt `DATABASE_URL`, ứng dụng dùng SQLite sẵn trong Python tại `outputs/runtime/feedback.sqlite3`. Startup nhập snapshot/sinh viên/GV/split và các request phân bổ/feedback được lưu bền vững. Khởi động lại không xóa lịch sử; phiên đăng nhập RAM sẽ mất và cần đăng nhập lại.
+
+Nếu environment đang có `DATABASE_URL` nhưng bạn muốn SQLite cho phiên terminal hiện tại:
+
+```powershell
+Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
+python run_dashboard.py --local-demo
+```
+
+Kiểm tra số bản ghi:
+
+```powershell
+python -c "import sqlite3; c=sqlite3.connect('outputs/runtime/feedback.sqlite3'); print({t:c.execute('SELECT count(*) FROM '+t).fetchone()[0] for t in ('snapshots','students','advisors','split_memberships','simulation_runs','feedback')}); c.close()"
+```
+
+Backup bằng API SQLite để có snapshot nhất quán, kể cả khi ứng dụng đang chạy:
+
+```powershell
+python -c "from pathlib import Path; import sqlite3; Path('backups').mkdir(exist_ok=True); s=sqlite3.connect('outputs/runtime/feedback.sqlite3'); d=sqlite3.connect('backups/local-backup.sqlite3'); s.backup(d); d.close(); s.close()"
+```
+
+Chọn tên backup mới nếu cần giữ nhiều phiên bản. Không commit database/backup/credential. PostgreSQL vẫn được hỗ trợ qua `DATABASE_URL`; chưa cài lại PostgreSQL hay chọn database cloud trong đợt local này.
+
 ## Dừng
 
 Nhấn `Ctrl+C` tại terminal launcher. Session in-memory mất khi process dừng; credential tạm của `--local-demo` không được tái sử dụng.
@@ -59,7 +84,7 @@ python scripts/run_benchmark.py --split validation
 python scripts/verify_release.py
 ```
 
-`run_benchmark.py` không tự huấn luyện model. Nó đánh giá baseline và những checkpoint nghiên cứu có trong `outputs/research-real`, đồng thời ghi các checkpoint bị từ chối. `verify_release.py` tạo manifest evidence nhưng cố ý giữ `production_ready=false` cho đến khi các gate bên ngoài được hoàn thành.
+`run_benchmark.py` không tự huấn luyện model. Nó đánh giá baseline và những checkpoint nghiên cứu có trong `outputs/research-current`, ghi `outputs/benchmarks/current-validation.json`, đồng thời ghi các checkpoint bị từ chối. `verify_release.py` tạo manifest evidence nhưng cố ý giữ `production_ready=false` cho đến khi các gate bên ngoài được hoàn thành. Thiếu benchmark hiện hành sẽ được ghi rõ `benchmark_status=missing`, không suy diễn engine đã được chọn.
 
 ## Lỗi thường gặp
 

@@ -14,6 +14,7 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python -m pytest tests/domain tests/environment tests/baselines tests/evaluation/test_benchmark_contract.py tests/evaluation/test_release_manifest.py tests/security/test_public_api.py -q -p no:cacheprovider
       - run: python scripts/train_maskable_ppo.py --smoke --output-dir outputs/ci-smoke
+      - run: npm --prefix frontend ci
       - run: npm --prefix frontend test
       - run: npm --prefix frontend run build
       - run: python -m compileall -q src backend scripts run_dashboard.py

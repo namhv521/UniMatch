@@ -22,7 +22,7 @@ TRPO dùng bước cập nhật bị ràng buộc trust region. ARS tìm hướn
 
 ## 8.6. Phạm vi smoke và full
 
-Smoke run dùng ma trận 2×2 trong 16 timesteps để kiểm tra wiring, import, save/load và manifest. Nó phải gắn `training_scope=synthetic-smoke`, hash riêng và không dùng cho promotion. Full run phải lấy đúng 158 hàng train từ ma trận v2, tạo 38 action và observation shape 114. Mặc định mục tiêu huấn luyện là 2.000.000 timesteps, nhưng số bước lớn không chứng minh model tốt; chỉ benchmark validation/test mới trả lời hiệu quả.
+Smoke run dùng ma trận 2×2 trong 16 timesteps để kiểm tra wiring, import, save/load và manifest. Nó phải gắn `training_scope=synthetic-smoke`, hash riêng và không dùng cho promotion. Full run hiện hành lấy đúng **154 hàng train** từ ma trận v2 215×38, tạo 38 action và observation shape 114. Mục tiêu promotion là tối thiểu 2.000.000 timesteps trên từng seed trong tập `{42, 123, 456, 789, 1024}`, nhưng số bước lớn không chứng minh model tốt; benchmark validation và các gate mới quyết định khả năng sử dụng.
 
 ## 8.7. Manifest và resume
 
@@ -47,9 +47,11 @@ Registry đọc trực tiếp archive để lấy observation/action space. Tr�
 | `promoted` | Qua benchmark, provenance và gate | dataset được manifest cho phép |
 | `invalid` | Hash, archive hoặc space sai | Không dataset nào |
 
-Hiện checkpoint cũ thuộc `toy_unpromoted`. Các run nghiên cứu mới chưa được gọi là production cho đến khi benchmark nhiều seed hoàn tất và gate được duyệt.
+Checkpoint toy 6×2 lịch sử thuộc `toy_unpromoted`. Report hiện hành đã đánh giá 24 checkpoint thật 114×38, sau đó chọn checkpoint có ngân sách lớn nhất theo từng cặp thuật toán–seed để tạo 20 dòng RL trong bảng chính. DQN, MaskablePPO và QR-DQN có đủ năm seed ở 2.000.000 bước; TRPO có ba seed ở 2.000.000 bước; ARS có một seed ở 2.464 bước; RecurrentPPO có một seed ở 256 bước. Các run này vẫn là `unpromoted_research`, không phải model production.
 
 ## 8.9. Promotion gate
 
-Một candidate chỉ được cân nhắc khi quota violations bằng 0, coverage bằng 1, không có fallback ẩn, provenance đầy đủ, và kết quả validation được tổng hợp trên danh sách seed khóa trước. Sau khi chọn cấu hình, test holdout chỉ chạy một lần theo quy trình đã ghi. Không chọn model từ test và không công bố “RL thắng” dựa vào một seed hoặc pilot 8.192 bước.
+Một candidate chỉ được cân nhắc khi quota violations bằng 0, coverage bằng 1, không có invalid/fallback, provenance đầy đủ, đủ năm seed khóa trước, mỗi seed đạt ít nhất 2.000.000 bước và optimality ratio không thấp hơn 0,88 so với Hungarian. Sau khi chọn cấu hình, test holdout chỉ chạy một lần theo quy trình đã ghi. Không chọn model từ test và không công bố “RL thắng” chỉ vì đủ timesteps.
+
+Report `outputs/benchmarks/current-validation.json` không promote thuật toán RL nào. MaskablePPO đủ seed/ngân sách và không invalid/fallback nhưng thất bại compatibility gate. DQN và QR-DQN đủ seed/ngân sách nhưng vừa thất bại compatibility gate vừa phụ thuộc sửa proposal không hợp lệ. TRPO còn thiếu hai seed và có fallback; ARS và RecurrentPPO vừa thiếu seed/ngân sách vừa có fallback. Hệ thống vì thế chọn Hungarian với lý do không có bằng chứng RL full-budget nhiều seed được phê duyệt.
 

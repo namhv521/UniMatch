@@ -25,6 +25,18 @@ def test_registry_detects_legacy_toy_checkpoints_and_rejects_real_dataset() -> N
     assert all(model["promoted"] is False for model in full.values())
 
 
+def test_catalog_mode_availability_matches_usable_checkpoints() -> None:
+    catalog = MatchingService(ROOT).catalog()
+    modes = {mode['id']: mode for mode in catalog['modes']}
+    for mode, research in (('rl', False), ('rl_research', True)):
+        usable = any(
+            model['status'] != 'invalid' and not model['smoke']
+            and model['research'] is research and model['supported_datasets']
+            for model in catalog['models']
+        )
+        assert modes[mode]['available'] is usable
+
+
 def test_registry_marks_hash_mismatch_invalid(tmp_path: Path) -> None:
     checkpoint_dir = tmp_path / "outputs/checkpoints"
     checkpoint_dir.mkdir(parents=True)

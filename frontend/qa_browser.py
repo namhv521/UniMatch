@@ -24,10 +24,21 @@ with sync_playwright() as playwright:
     page.get_by_label("Email").fill(EMAIL)
     page.get_by_label("Mật khẩu").fill(PASSWORD)
     page.get_by_role("button", name="Đăng nhập", exact=True).click()
-    page.get_by_role("heading", name="Tìm giảng viên phù hợp với đề tài của bạn").wait_for()
-    assert page.get_by_role("button", name="Bắt đầu ghép cặp").is_visible()
-    page.get_by_role("button", name="Bắt đầu ghép cặp").click()
+    page.get_by_role("heading", name="Năng lực gặp").wait_for()
+    assert page.get_by_role("link", name="Phân bổ đợt sinh viên").is_visible()
+    page.get_by_role("link", name="Khám phá mô phỏng").click()
     page.get_by_role("heading", name="Ghép cặp & mô phỏng thuật toán").wait_for()
+    page.wait_for_function("document.querySelector('#dataset-select')?.value === 'real-train'")
+    assert page.locator("#algorithm-select").input_value() == "hungarian"
+    with page.expect_response(lambda response: response.url.endswith('/api/v1/simulate'), timeout=120000) as real_response:
+        page.locator("#simulate").click()
+    assert real_response.value.ok
+    real_result = real_response.value.json()['data']
+    train = page.request.get(BASE_URL + '/api/v1/datasets/real-train').json()['data']
+    assert len(real_result['assignments']) == len(train['students'])
+    assert real_result['metrics']['quota_violations'] == 0
+    page.locator(f"#timeline[max='{len(train['students'])}']").wait_for()
+    page.screenshot(path=str(OUTPUT / "real-train-desktop.png"), full_page=True)
     page.get_by_label("Dữ liệu").select_option("sample-3x2")
     page.get_by_role("button", name="Bắt đầu mô phỏng").click()
     page.get_by_text("SV01", exact=True).last.wait_for()
@@ -44,6 +55,13 @@ with sync_playwright() as playwright:
     page.get_by_role("link", name="Kết quả").click()
     page.get_by_role("heading", name="Benchmark cùng protocol").wait_for()
     assert page.get_by_text("Engine: Hungarian").is_visible()
+    assert page.get_by_role("heading", name="Checkpoint cho dữ liệu hiện tại").is_visible()
+    with page.expect_response(lambda response: response.url.endswith('/api/v1/results/summary')):
+        page.locator("#refresh-data").click()
+    page.wait_for_function("!document.querySelector('#refresh-data')?.disabled")
+    report = page.request.get(BASE_URL + '/api/v1/results/summary').json()['data']
+    assert report['rows']
+    assert all(set(row) <= {'algorithm', 'seed', 'metrics'} for row in report['rows'])
     page.screenshot(path=str(OUTPUT / "results-desktop.png"), full_page=True)
     page.get_by_role("link", name="Ghép cặp", exact=True).click()
     page.get_by_label("Dữ liệu").select_option("real-validation")

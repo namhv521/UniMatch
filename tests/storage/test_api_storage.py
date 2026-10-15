@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -129,3 +130,34 @@ def test_results_summary_ignores_legacy_benchmark_when_current_is_missing(monkey
 
     assert response.status_code == 200
     assert response.json()["data"]["status"] == "not_evaluated"
+
+
+def test_default_sqlite_store_persists_api_run_and_feedback(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("KLTN_LOGIN_EMAIL", "local@example.test")
+    monkeypatch.setenv("KLTN_LOGIN_PASSWORD", "password")
+    monkeypatch.setenv("KLTN_COOKIE_SECURE", "false")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    app = create_app(root=ROOT, runtime_dir=tmp_path)
+
+    with TestClient(app) as client:
+        _login(client)
+        assert client.post(
+            "/api/v1/simulate",
+            headers={"Origin": ORIGIN},
+            json={"mode": "semantic", "algorithm": "hungarian", "dataset": "sample-2x2", "seed": 7},
+        ).status_code == 200
+        assert client.post(
+            "/api/v1/feedback",
+            headers={"Origin": ORIGIN},
+            json={"mode": "semantic", "algorithm": "hungarian", "helpful": True},
+        ).status_code == 200
+
+    with sqlite3.connect(tmp_path / "feedback.sqlite3") as connection:
+        run = connection.execute(
+            "SELECT endpoint, algorithm, seed FROM simulation_runs"
+        ).fetchone()
+        feedback = connection.execute(
+            "SELECT algorithm, helpful FROM feedback"
+        ).fetchone()
+    assert run == ("simulate", "hungarian", 7)
+    assert feedback == ("hungarian", 1)

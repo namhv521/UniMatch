@@ -65,7 +65,7 @@ def run(output, checkpoint_dir, split='validation'):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--split', choices=['validation','test'], default='validation')
-    parser.add_argument('--checkpoint-dir', type=Path, default=ROOT / 'outputs/research-real')
-    parser.add_argument('--output', type=Path, default=ROOT / 'outputs/benchmarks/validation-2026-10-07.json')
+    parser.add_argument('--checkpoint-dir', type=Path, default=ROOT / 'outputs/research-current')
+    parser.add_argument('--output', type=Path, default=ROOT / 'outputs/benchmarks/current-validation.json')
     args = parser.parse_args()
     run(args.output, args.checkpoint_dir, args.split)

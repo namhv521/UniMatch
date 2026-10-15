@@ -13,11 +13,11 @@ def main():
     parser.add_argument('--output', type=Path, default=ROOT/'outputs/final_validation/release-manifest.json')
     args = parser.parse_args()
     files = {}
-    for folder in ('src','backend','frontend','scripts','.github'):
+    for folder in ('src','backend','frontend','scripts','.github','database','deployment','configs','assets'):
         for path in sorted((ROOT/folder).rglob('*')):
-            if path.is_file() and '__pycache__' not in path.parts and path.suffix in ('.py','.js','.css','.html','.json','.yml','.yaml') and 'dist' not in path.parts:
+            if path.is_file() and '__pycache__' not in path.parts and (path.suffix in ('.py','.js','.mjs','.css','.html','.json','.yml','.yaml','.sql','.xlsx') or path.name == 'Caddyfile') and 'dist' not in path.parts:
                 files[str(path.relative_to(ROOT)).replace('\\','/')] = hashlib.sha256(path.read_bytes()).hexdigest()
-    for name in ('requirements.txt','Dockerfile','docker-compose.yml','.dockerignore','run_dashboard.py'):
+    for name in ('requirements.txt','Dockerfile','docker-compose.yml','docker-compose.production.yml','.dockerignore','run_dashboard.py','pytest.ini'):
         path = ROOT/name
         if path.is_file():
             files[name] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -30,14 +30,14 @@ def main():
             if original.is_file() and hashlib.sha256(original.read_bytes()).hexdigest() != digest:
                 raise ValueError('stale frontend bundle: '+path.name)
             runtime_assets[path.name] = digest
-    for name in ('data/features/feature_manifest_v2.json','outputs/benchmarks/validation-2026-10-07.json'):
+    for name in ('data/features/feature_manifest_v2.json','outputs/benchmarks/current-validation.json'):
         path = ROOT/name
         evidence[name] = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
-    for folder in ('data/curated','data/features','outputs/checkpoints','outputs/research-real'):
+    for folder in ('data/curated','data/features','outputs/checkpoints','outputs/research-real','outputs/research-filtered','outputs/research-current'):
         for path in sorted((ROOT/folder).rglob('*')):
             if path.is_file() and path.suffix in ('.json','.npy','.zip'):
                 evidence[str(path.relative_to(ROOT)).replace('\\','/')] = hashlib.sha256(path.read_bytes()).hexdigest()
-    benchmark_path=ROOT/'outputs/benchmarks/validation-2026-10-07.json'
+    benchmark_path=ROOT/'outputs/benchmarks/current-validation.json'
     report=json.loads(benchmark_path.read_text()) if benchmark_path.exists() else {}
     promoted=[name for name,gate in report.get('promotion',{}).items() if gate.get('promoted')]
     manifest={'created_at':datetime.now(timezone.utc).isoformat(),'source_hashes':files,
@@ -48,7 +48,10 @@ def main():
               'production_ready':False,'academic_final_validation_complete':False,
               'limitations':['official advisor quota unavailable','external deployment not verified',
                              'manual thesis review and institution submission not performed'],
-              'selected_engine':report.get('selected_engine','Hungarian')}
+              'benchmark_status':'present' if benchmark_path.is_file() else 'missing',
+              'selected_engine':report.get('selected_engine')}
+    if not benchmark_path.is_file():
+        manifest['limitations'].append('current validation benchmark is missing')
     if not promoted:
         manifest['limitations'].append('no full-budget multi-seed real-data RL candidate passed promotion')
     args.output.parent.mkdir(parents=True,exist_ok=True)

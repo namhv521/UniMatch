@@ -1,0 +1,34 @@
+services:
+  dashboard:
+    environment:
+      KLTN_COOKIE_SECURE: "true"
+      KLTN_ALLOWED_ORIGIN: "https://${KLTN_DOMAIN:?Set KLTN_DOMAIN in .env}"
+
+  proxy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      KLTN_DOMAIN: ${KLTN_DOMAIN:?Set KLTN_DOMAIN in .env}
+    volumes:
+      - type: bind
+        source: ./deployment/Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      dashboard:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:

@@ -8,16 +8,18 @@ import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.serving import MatchingService, ServiceError
 
+from .cohorts import ALGORITHM as COHORT_ALGORITHM
+from .cohorts import CohortError, CohortService
 from .schemas import FeedbackRequest, LoginRequest, RecommendRequest, SimulateRequest
 from .storage import PostgresStorage, SQLiteFeedbackStore, snapshot_identity
 
@@ -36,6 +38,26 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
 
 def _benchmark_path(product_root: Path) -> Path:
     return product_root / "outputs/benchmarks/current-validation.json"
+
+
+def _template_path(product_root: Path) -> Path:
+    return product_root / "assets/student-skills-template.xlsx"
+
+
+async def _read_limited_body(request: Request, max_bytes: int) -> bytes:
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > max_bytes:
+                raise CohortError("File Excel vượt quá giới hạn 5 MiB", status_code=413, code="file_too_large")
+        except ValueError:
+            pass
+    content = bytearray()
+    async for chunk in request.stream():
+        if len(content) + len(chunk) > max_bytes:
+            raise CohortError("File Excel vượt quá giới hạn 5 MiB", status_code=413, code="file_too_large")
+        content.extend(chunk)
+    return bytes(content)
 
 
 class Sessions:
@@ -75,12 +97,17 @@ def create_app(
     storage: Any | None = None,
 ) -> FastAPI:
     product_root = Path(root) if root is not None else Path(__file__).parents[2]
+    bundle = os.getenv("KLTN_ARTIFACT_BUNDLE")
+    if bundle:
+        from .artifacts import restore_artifacts
+        restore_artifacts(product_root, os.environ["DATABASE_URL"], bundle)
     try:
         service: MatchingService | None = MatchingService(product_root)
     except ServiceError as exc:
         LOGGER.warning("serving_initialization_failed correlation_id=%s exception=%s cause=%s", secrets.token_hex(8), type(exc).__name__, type(exc.__cause__).__name__)
         service = None
     active_snapshot_hash = snapshot_identity(service.provenance) if service is not None else None
+    cohort_service = CohortService(product_root, service) if service is not None else None
     sessions = Sessions(max(60, int(os.getenv("KLTN_SESSION_TTL_SECONDS", "28800"))))
     if storage is None:
         database_url = os.getenv("DATABASE_URL")
@@ -129,6 +156,10 @@ def create_app(
     async def service_error(_request: Request, exc: ServiceError):
         return _error(400, "service_error", str(exc))
 
+    @app.exception_handler(CohortError)
+    async def cohort_error(_request: Request, exc: CohortError):
+        return _error(exc.status_code, exc.code, str(exc))
+
     @app.exception_handler(Exception)
     async def internal_error(_request: Request, _exc: Exception):
         correlation_id = secrets.token_hex(8)
@@ -153,6 +184,11 @@ def create_app(
         if service is None:
             raise HTTPException(status_code=503, detail="service_unavailable")
         return service
+
+    def require_cohort_service() -> CohortService:
+        if cohort_service is None:
+            raise HTTPException(status_code=503, detail="service_unavailable")
+        return cohort_service
 
     @app.exception_handler(HTTPException)
     async def http_error(_request: Request, exc: HTTPException):
@@ -239,6 +275,50 @@ def create_app(
         available = require_service()
         return {"status": "success", "data": available.dataset(name)}
 
+    @app.get("/api/v1/student-cohorts/advisors", dependencies=[Depends(require_session)])
+    def cohort_advisors():
+        return {"status": "success", "data": require_cohort_service().advisors()}
+
+    @app.get("/api/v1/student-cohorts/template", dependencies=[Depends(require_session)])
+    def cohort_template():
+        path = _template_path(product_root)
+        if not path.is_file():
+            return _error(503, "template_unavailable", "File Excel mẫu chưa sẵn sàng")
+        return FileResponse(
+            path,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename="student-skills-template.xlsx",
+        )
+
+    @app.post("/api/v1/student-cohorts/preview", dependencies=[Depends(require_session)])
+    async def cohort_preview(request: Request):
+        available = require_cohort_service()
+        result = available.preview(
+            await _read_limited_body(request, int(available.schema["max_file_bytes"]))
+        )
+        return {"status": "success", "data": result}
+
+    @app.post("/api/v1/student-cohorts/allocate", dependencies=[Depends(require_session)])
+    async def cohort_allocate(
+        request: Request,
+        advisor_ids: Annotated[list[str] | None, Query()] = None,
+    ):
+        available = require_cohort_service()
+        result = available.allocate(
+            await _read_limited_body(request, int(available.schema["max_file_bytes"])),
+            advisor_ids or [],
+        )
+        storage.add_run(
+            endpoint="allocate",
+            mode="semantic",
+            algorithm=COHORT_ALGORITHM,
+            dataset=f"uploaded-{result['cohort_hash']}",
+            seed=0,
+            snapshot_hash=active_snapshot_hash,
+            result=result,
+        )
+        return {"status": "success", "data": result}
+
     @app.post("/api/v1/simulate", dependencies=[Depends(require_session)])
     def simulate(payload: SimulateRequest):
         available = require_service()
@@ -299,6 +379,10 @@ def create_app(
                 )
                 if key in artifact
             }
+            data["rows"] = [
+                {key: row[key] for key in ("algorithm", "seed", "metrics") if key in row}
+                for row in artifact.get("rows", [])
+            ]
         else:
             data = {
                 "status": "not_evaluated",

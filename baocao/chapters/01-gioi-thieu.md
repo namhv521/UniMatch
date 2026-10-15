@@ -28,11 +28,11 @@ Báo cáo tổ chức đánh giá quanh bốn câu hỏi:
 - **RQ3:** Khi huấn luyện và đánh giá trên không gian thật 38 giảng viên, các policy RL có đạt ràng buộc quota và cạnh tranh được với baseline trên validation/test hay không?
 - **RQ4:** Hệ thống có thể phục vụ kết quả an toàn, ẩn danh, giải thích được nguồn dữ liệu và từ chối model không tương thích hay không?
 
-Hiện tại RQ1 và phần nền tảng của RQ2 có artifact để kiểm tra. RQ3 chưa có đủ bằng chứng: checkpoint cũ là toy, chưa có so sánh holdout nhiều seed. RQ4 đang ở giai đoạn tích hợp; kiến trúc và hợp đồng kiểm thử đã được định nghĩa nhưng chỉ được xem là hoàn thành sau khi có test và smoke run mới.
+RQ1 và RQ2 có artifact hiện hành để kiểm tra trên snapshot 215×38. RQ3 đã có benchmark validation cho ba baseline và sáu thuật toán RL, nhưng chưa có candidate RL nào vượt toàn bộ promotion gate; vì vậy Hungarian vẫn là engine được chọn. RQ4 có mã nguồn FE, BE, API, PostgreSQL, Docker và kiểm tra phát hành cục bộ; việc công bố trên Internet vẫn cần hạ tầng, secret, domain/HTTPS và smoke test tại môi trường đích.
 
 ## 1.4. Phạm vi và không phạm vi
 
-Phạm vi hiện tại gồm dữ liệu cục bộ, ma trận 220×38, split v2, baseline có quota, môi trường Gymnasium, các adapter RL, API FastAPI và frontend cùng origin. Hệ thống dùng ID ẩn danh ở bề mặt phục vụ.
+Phạm vi hiện tại gồm dữ liệu cục bộ, ma trận **215×38**, split v2 gồm **154 train, 20 validation, 21 test và 20 future**, baseline có hạn mức, môi trường Gymnasium, sáu adapter RL, API FastAPI, PostgreSQL và frontend cùng origin. Hệ thống dùng ID ẩn danh ở bề mặt phục vụ. Snapshot 220×38 chỉ còn là mốc lịch sử trước khi loại năm bản ghi theo yêu cầu và không được dùng như trạng thái hiện hành.
 
 Đề tài không tuyên bố phân công lịch sử là đáp án tối ưu. Lịch sử chỉ là **weak label** phản ánh quyết định trong bối cảnh cũ, có thể chứa ràng buộc hoặc ưu tiên không quan sát được. Đề tài cũng không tuyên bố load variance là định nghĩa đầy đủ của công bằng. Đây chỉ là một chỉ báo vận hành; công bằng chính thức phải do đơn vị đào tạo quy định, có thể bao gồm học hàm, khối lượng công việc, nguyện vọng, xung đột lợi ích và yêu cầu chuyên môn.
 

@@ -14,6 +14,8 @@
 !database/**
 !configs/
 !configs/**
+!assets/
+!assets/student-skills-template.xlsx
 !frontend/
 !frontend/package.json
 !frontend/build.mjs
@@ -21,6 +23,7 @@
 !frontend/style.css
 !frontend/app.js
 !frontend/visualization.js
+!frontend/student-cohorts.js
 
 **/__pycache__/
 **/*.py[cod]

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import sqlite3
 from types import SimpleNamespace
 
+import pytest
+
 from backend.app.schemas import FeedbackRequest
-from backend.app.storage import PostgresStorage, snapshot_identity
+from backend.app.storage import PostgresStorage, SQLiteFeedbackStore, snapshot_identity
 
 
 class FakeConnection:
@@ -114,6 +118,26 @@ def test_initialize_imports_validated_snapshot_and_split_idempotently(tmp_path) 
     ]
 
 
+def test_initialize_creates_configured_schema_before_using_it(tmp_path) -> None:
+    schema = tmp_path / "schema.sql"
+    schema.write_text("", encoding="utf-8")
+    connection = FakeConnection()
+    storage = PostgresStorage(
+        "postgresql://example",
+        schema,
+        schema_name="kltn_app",
+        connect=lambda _dsn: connection,
+    )
+
+    storage.initialize(None)
+
+    statements = [query for query, _ in connection.calls]
+    assert statements[:2] == [
+        'CREATE SCHEMA IF NOT EXISTS "kltn_app"',
+        'SET search_path TO "kltn_app"',
+    ]
+
+
 def test_postgres_records_simulation_and_feedback_as_json(tmp_path) -> None:
     """Catches a successful API write being acknowledged without durable SQL."""
     schema = tmp_path / "schema.sql"
@@ -140,3 +164,95 @@ def test_postgres_records_simulation_and_feedback_as_json(tmp_path) -> None:
     assert run_params[2:7] == ("simulate", "semantic", "hungarian", "real-train", 42)
     assert '"student_id":"SV-TRAIN-001"' in run_params[-1]
     assert feedback_params == ("d" * 64, "semantic", "hungarian", True)
+
+
+def test_sqlite_initialize_imports_snapshot_idempotently(tmp_path) -> None:
+    storage = SQLiteFeedbackStore(tmp_path)
+    service = _service()
+
+    storage.initialize(service)
+    service.theses[0]["thesis_title"] = "Updated"
+    storage.initialize(service)
+
+    with sqlite3.connect(storage.path) as connection:
+        counts = {
+            table: connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            for table in ("snapshots", "students", "advisors", "split_memberships")
+        }
+        profile = connection.execute(
+            "SELECT profile FROM students WHERE student_id = ?", ("student-1",)
+        ).fetchone()[0]
+        foreign_key_errors = connection.execute("PRAGMA foreign_key_check").fetchall()
+    assert counts == {
+        "snapshots": 1,
+        "students": 2,
+        "advisors": 1,
+        "split_memberships": 2,
+    }
+    assert json.loads(profile)["thesis_title"] == "Updated"
+    assert foreign_key_errors == []
+
+
+def test_sqlite_run_and_feedback_survive_new_store_instance(tmp_path) -> None:
+    service = _service()
+    snapshot_hash = snapshot_identity(service.provenance)
+    storage = SQLiteFeedbackStore(tmp_path)
+    storage.initialize(service)
+    storage.add_run(
+        endpoint="simulate",
+        mode="semantic",
+        algorithm="hungarian",
+        dataset="real-train",
+        seed=42,
+        snapshot_hash=snapshot_hash,
+        result={"assignments": [{"student_id": "student-1"}]},
+    )
+    storage.add_feedback(
+        FeedbackRequest(mode="semantic", algorithm="hungarian", helpful=True),
+        snapshot_hash=snapshot_hash,
+    )
+
+    reopened = SQLiteFeedbackStore(tmp_path)
+    reopened.initialize(service)
+
+    with sqlite3.connect(reopened.path) as connection:
+        run = connection.execute(
+            "SELECT endpoint, seed, result FROM simulation_runs"
+        ).fetchone()
+        feedback = connection.execute(
+            "SELECT snapshot_hash, helpful FROM feedback"
+        ).fetchone()
+    assert run[:2] == ("simulate", 42)
+    assert '"student_id":"student-1"' in run[2]
+    assert feedback == (snapshot_hash, 1)
+    with pytest.raises(sqlite3.IntegrityError), sqlite3.connect(reopened.path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute(
+            """
+            INSERT INTO simulation_runs(id, snapshot_hash, endpoint, mode, algorithm, dataset, seed, result)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("bad-run", "0" * 64, "simulate", "semantic", "greedy", "real-train", 1, "{}"),
+        )
+
+
+def test_sqlite_migrates_old_feedback_table_without_losing_rows(tmp_path) -> None:
+    path = tmp_path / "feedback.sqlite3"
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "CREATE TABLE feedback (id INTEGER PRIMARY KEY, created_at INTEGER NOT NULL, mode TEXT NOT NULL, algorithm TEXT NOT NULL, helpful INTEGER NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO feedback(created_at, mode, algorithm, helpful) VALUES (?, ?, ?, ?)",
+            (1, "semantic", "greedy", 1),
+        )
+
+    SQLiteFeedbackStore(tmp_path).initialize(None)
+
+    with sqlite3.connect(path) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(feedback)")}
+        row = connection.execute(
+            "SELECT created_at, mode, algorithm, helpful, snapshot_hash FROM feedback"
+        ).fetchone()
+    assert "snapshot_hash" in columns
+    assert row == (1, "semantic", "greedy", 1, None)

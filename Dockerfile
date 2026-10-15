@@ -1,13 +1,16 @@
 FROM node:22-bookworm-slim AS frontend
 WORKDIR /build/frontend
-COPY frontend/package.json frontend/build.mjs ./
-COPY frontend/index.html frontend/style.css frontend/app.js frontend/visualization.js ./
+COPY frontend/package.json frontend/package-lock.json frontend/build.mjs ./
+RUN npm ci --omit=dev
+COPY frontend/index.html frontend/style.css frontend/*.js ./
+COPY frontend/assets ./assets
 RUN npm run build
 
 FROM python:3.12-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    MPLCONFIGDIR=/tmp/matplotlib
 WORKDIR /app
 
 COPY requirements.txt ./
@@ -23,6 +26,7 @@ COPY backend ./backend
 COPY scripts ./scripts
 COPY database ./database
 COPY configs ./configs
+COPY assets/student-skills-template.xlsx ./assets/student-skills-template.xlsx
 COPY run_dashboard.py ./
 COPY --from=frontend /build/frontend/dist ./frontend/dist
 

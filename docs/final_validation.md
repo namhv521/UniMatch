@@ -1,5 +1,7 @@
 # Kiểm chứng và bàn giao — 2026-10-07
 
+> Đây là bằng chứng lịch sử của snapshot 220×38 ngày 07/10. Trạng thái hiện hành 215×38, kết quả benchmark và kiểm chứng đợt 15/10 nằm tại [completion_validation.md](completion_validation.md). Không dùng bảng lịch sử bên dưới như kết quả của snapshot mới.
+
 ## Kết quả triển khai
 
 Đã hiện thực luồng đăng nhập → trang chủ → ghép cặp → kết quả; API kiểm phiên phía server, Origin write, cookie HttpOnly; registry kiểm hash, provenance, không gian action/observation và ngân sách thực tế. Mô phỏng 3D dùng tọa độ xyz, xoay/zoom, phát từng event, hạn mức, invalid proposal và fallback. Giao diện giữ bố cục ảnh v1; reward chỉ hiển thị với RL. Không thêm dependency frontend.

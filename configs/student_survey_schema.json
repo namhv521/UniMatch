@@ -1,0 +1,163 @@
+{
+  "version": "2.0",
+  "sheet": "KhaoSat",
+  "header_row": 1,
+  "max_students": 1000,
+  "max_file_bytes": 5242880,
+  "columns": [
+    {
+      "key": "student_id",
+      "label": "Mã sinh viên",
+      "required": true,
+      "kind": "text"
+    },
+    {
+      "key": "student_name",
+      "label": "Họ và tên",
+      "required": true,
+      "kind": "text"
+    },
+    {
+      "key": "class_name",
+      "label": "Lớp / khóa",
+      "kind": "context"
+    },
+    {
+      "key": "major",
+      "label": "Ngành / chuyên ngành",
+      "kind": "context"
+    },
+    {
+      "key": "web_languages",
+      "label": "Ngôn ngữ lập trình web",
+      "required": false,
+      "kind": "skills"
+    },
+    {
+      "key": "app_languages",
+      "label": "Ngôn ngữ ứng dụng",
+      "required": false,
+      "kind": "skills"
+    },
+    {
+      "key": "frontend_frameworks",
+      "label": "Framework frontend",
+      "required": false,
+      "kind": "skills"
+    },
+    {
+      "key": "backend_frameworks",
+      "label": "Framework backend",
+      "required": false,
+      "kind": "skills"
+    },
+    {
+      "key": "ai_frameworks",
+      "label": "Framework AI",
+      "required": false,
+      "kind": "skills"
+    },
+    {
+      "key": "database_cache",
+      "label": "Cơ sở dữ liệu / cache",
+      "required": false,
+      "kind": "skills"
+    },
+    {
+      "key": "app_db_backend",
+      "label": "Database / backend ứng dụng",
+      "required": false,
+      "kind": "skills"
+    },
+    {
+      "key": "ai_problems",
+      "label": "Bài toán AI",
+      "required": false,
+      "kind": "skills"
+    },
+    {
+      "key": "data_tools",
+      "label": "Công cụ dữ liệu",
+      "required": false,
+      "kind": "skills"
+    },
+    {
+      "key": "data_models",
+      "label": "Mô hình dữ liệu",
+      "required": false,
+      "kind": "skills"
+    },
+    {
+      "key": "research_methods",
+      "label": "Phương pháp nghiên cứu",
+      "required": false,
+      "kind": "skills"
+    },
+    {
+      "key": "primary_role",
+      "label": "Vai trò chuyên môn chính",
+      "required": false,
+      "kind": "skills"
+    },
+    {
+      "key": "secondary_roles",
+      "label": "Vai trò chuyên môn khác",
+      "required": false,
+      "kind": "skills"
+    },
+    {
+      "key": "mobile_frameworks",
+      "label": "Framework mobile đã dùng",
+      "kind": "skills"
+    },
+    {
+      "key": "dev_tools",
+      "label": "Công cụ phát triển đã dùng",
+      "kind": "skills"
+    },
+    {
+      "key": "skill_levels",
+      "label": "Mức độ từng kỹ năng",
+      "kind": "levels"
+    },
+    {
+      "key": "project_experience",
+      "label": "Dự án đã làm và phần việc của bạn",
+      "kind": "context"
+    },
+    {
+      "key": "project_links",
+      "label": "Link sản phẩm / GitHub (nếu có)",
+      "kind": "context"
+    },
+    {
+      "key": "preferred_fields",
+      "label": "Lĩnh vực muốn tìm hiểu",
+      "kind": "context"
+    },
+    {
+      "key": "learning_goals",
+      "label": "Kỹ năng muốn học thêm",
+      "kind": "context"
+    },
+    {
+      "key": "thesis_title",
+      "label": "Tên đề tài (chưa có để trống)",
+      "required": false,
+      "kind": "text"
+    },
+    {
+      "key": "abstract",
+      "label": "Mô tả đề tài (chưa có để trống)",
+      "required": false,
+      "kind": "text"
+    }
+  ],
+  "header_mode": "labels",
+  "level_scale": {
+    "1": "Đã học / làm theo hướng dẫn",
+    "2": "Tự làm được chức năng hoặc bài tập",
+    "3": "Đã dùng trong dự án, giải thích được phần việc"
+  },
+  "matching_policy": "Only declared current skills and optional actual topic; interests, goals, proficiency, identity and evidence are retained separately, not scored as proven skills."
+}

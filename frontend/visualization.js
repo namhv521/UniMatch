@@ -1,5 +1,23 @@
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+export function preferredDataset(datasets, dataLoaded) {
+  return (dataLoaded && datasets.find(item => item.id === "real-train")?.id)
+    || datasets.find(item => item.id.startsWith("sample-"))?.id || "sample-3x2";
+}
+
+export function compatibleModels(models, datasetId) {
+  const selected = new Map();
+  for (const model of models) {
+    if (model.available === false || model.status === "invalid" || model.smoke
+      || !model.supported_datasets?.includes(datasetId)) continue;
+    const key = `${model.algorithm}:${model.seed}:${model.research === true}`;
+    const previous = selected.get(key);
+    if (!previous || (model.completed_timesteps || 0) > (previous.completed_timesteps || 0)
+      || (model.completed_timesteps === previous.completed_timesteps && model.id < previous.id)) selected.set(key, model);
+  }
+  return [...selected.values()];
+}
+
 export function normalizeBenchmark(report = {}) {
   return {
     summary: (report.summary || []).map((item) => ({
@@ -114,17 +132,24 @@ export class MatchingScene {
 
   bindInput() {
     this.canvas.addEventListener("pointerdown", (event) => {
-      this.drag = { x: event.clientX, y: event.clientY };
+      if (this.drag) return;
+      this.drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
       this.canvas.setPointerCapture(event.pointerId);
     });
     this.canvas.addEventListener("pointermove", (event) => {
-      if (!this.drag) return;
+      if (!this.drag || event.pointerId !== this.drag.pointerId) return;
       this.yaw += (event.clientX - this.drag.x) * 0.008;
       this.pitch = clamp(this.pitch + (event.clientY - this.drag.y) * 0.005, -0.25, 0.85);
-      this.drag = { x: event.clientX, y: event.clientY };
+      this.drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
       this.draw();
     });
-    this.canvas.addEventListener("pointerup", () => { this.drag = null; });
+    const endDrag = (event = {}) => {
+      if (this.drag && (event.pointerId == null || event.pointerId === this.drag.pointerId)) this.drag = null;
+    };
+    this.canvas.addEventListener("pointerup", endDrag);
+    this.canvas.addEventListener("pointercancel", endDrag);
+    this.canvas.addEventListener("lostpointercapture", endDrag);
+    this.canvas.ownerDocument?.defaultView?.addEventListener("blur", endDrag);
     this.canvas.addEventListener("wheel", (event) => {
       event.preventDefault();
       this.zoom = clamp(this.zoom - event.deltaY * 0.08, 28, 100);

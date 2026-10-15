@@ -20,7 +20,9 @@ C_{ij}=\cos(u_i,v_j)=
 \frac{u_i^\top v_j}{\lVert u_i\rVert_2\lVert v_j\rVert_2}.
 \]
 
-Pipeline hiện tại dùng vectorizer được fit từ văn bản train và văn bản advisor, sau đó transform toàn bộ sinh viên. Điểm được lưu dạng `float64` trong ma trận 220×38. Manifest v2 ghi phương pháp `tfidf`, hash corpus train, hash vocabulary, shape và SHA-256 của bytes ma trận.
+Pipeline hiện tại dùng vectorizer được fit từ văn bản train gốc và văn bản advisor, sau đó transform toàn bộ sinh viên. Điểm được lưu dạng `float64` trong ma trận hiện hành **215×38**. Manifest v2 ghi phương pháp `tfidf`, hash corpus train, hash vocabulary, shape và SHA-256 của bytes ma trận.
+
+Snapshot 215 hàng giữ vocabulary/IDF đã đóng băng của snapshot 220 hàng. Năm hàng bị loại không còn trong ma trận và split; tuy nhiên bốn văn bản thuộc train gốc đã tham gia lúc fit nên vẫn có thể ảnh hưởng trọng số của các hàng còn lại. `preprocessing_scope` và `parent_feature_sha256` lưu quan hệ này. Đây là giới hạn của phép chuyển snapshot, cần công bố khi diễn giải điểm; một protocol mới muốn loại hoàn toàn ảnh hưởng đó phải refit từ 154 hàng train và tạo feature version mới.
 
 ## 5.3. Tiền xử lý và ngôn ngữ tiếng Việt
 
