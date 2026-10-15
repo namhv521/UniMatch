@@ -2,8 +2,8 @@
 import argparse
 import hashlib
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from backend.app.artifacts import ALLOWED_ROOTS, artifact_target
