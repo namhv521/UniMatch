@@ -127,16 +127,29 @@ export class MatchingScene {
     this.data = { students: [], advisors: [], events: [] };
     this.index = 0;
     this.drag = null;
+    this.listeners = [];
     this.bindInput();
   }
 
+  listen(target, type, handler, options) {
+    if (!target) return;
+    target.addEventListener(type, handler, options);
+    this.listeners.push([target, type, handler, options]);
+  }
+
+  dispose() {
+    for (const [target, type, handler, options] of this.listeners) target.removeEventListener?.(type, handler, options);
+    this.listeners = [];
+    this.drag = null;
+  }
+
   bindInput() {
-    this.canvas.addEventListener("pointerdown", (event) => {
+    this.listen(this.canvas, "pointerdown", (event) => {
       if (this.drag) return;
       this.drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
       this.canvas.setPointerCapture(event.pointerId);
     });
-    this.canvas.addEventListener("pointermove", (event) => {
+    this.listen(this.canvas, "pointermove", (event) => {
       if (!this.drag || event.pointerId !== this.drag.pointerId) return;
       this.yaw += (event.clientX - this.drag.x) * 0.008;
       this.pitch = clamp(this.pitch + (event.clientY - this.drag.y) * 0.005, -0.25, 0.85);
@@ -146,16 +159,16 @@ export class MatchingScene {
     const endDrag = (event = {}) => {
       if (this.drag && (event.pointerId == null || event.pointerId === this.drag.pointerId)) this.drag = null;
     };
-    this.canvas.addEventListener("pointerup", endDrag);
-    this.canvas.addEventListener("pointercancel", endDrag);
-    this.canvas.addEventListener("lostpointercapture", endDrag);
-    this.canvas.ownerDocument?.defaultView?.addEventListener("blur", endDrag);
-    this.canvas.addEventListener("wheel", (event) => {
+    this.listen(this.canvas, "pointerup", endDrag);
+    this.listen(this.canvas, "pointercancel", endDrag);
+    this.listen(this.canvas, "lostpointercapture", endDrag);
+    this.listen(this.canvas.ownerDocument?.defaultView, "blur", endDrag);
+    this.listen(this.canvas, "wheel", (event) => {
       event.preventDefault();
       this.zoom = clamp(this.zoom - event.deltaY * 0.08, 28, 100);
       this.draw();
     }, { passive: false });
-    this.canvas.addEventListener("keydown", (event) => {
+    this.listen(this.canvas, "keydown", (event) => {
       const moves = { ArrowLeft: -0.08, ArrowRight: 0.08 };
       if (moves[event.key]) {
         this.yaw += moves[event.key];

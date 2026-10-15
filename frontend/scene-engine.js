@@ -74,7 +74,7 @@ export function createStage(canvas, { interactive = false, home = false, animate
     if (!paused && (!reduced.matches || manualMotion)) frame = requestAnimationFrame(tick);
   }
   function sync() { canvas.parentElement.dataset.motion = paused || !visible || document.hidden || (reduced.matches && !manualMotion) ? "paused" : "running"; cancelAnimationFrame(frame); previous = 0; draw(); if (visible && !document.hidden && !paused && (!reduced.matches || manualMotion)) frame = requestAnimationFrame(tick); }
-  const resize = () => { const { width, height } = canvas.getBoundingClientRect(); if (!width || !height) return; renderer.setSize(width, height, false); camera.aspect = width / height; camera.updateProjectionMatrix(); draw(); };
+  const resize = () => { const { width, height } = canvas.getBoundingClientRect(); if (!width || !height) return; renderer.setSize(width, height, false); camera.aspect = width / height; camera.fov = camera.aspect < 1.1 ? 54 : 38; camera.updateProjectionMatrix(); draw(); };
   const observer = new ResizeObserver(resize); observer.observe(canvas);
   const intersection = new IntersectionObserver(entries => { visible = entries[0].isIntersecting; sync(); }); intersection.observe(canvas);
   const lost = event => { event.preventDefault(); cancelAnimationFrame(frame); canvas.dataset.renderer = 'context-lost'; };

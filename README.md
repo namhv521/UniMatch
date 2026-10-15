@@ -1,6 +1,6 @@
 # UniMatch — ghép cặp sinh viên và giảng viên
 
-Dashboard nghiên cứu: đăng nhập, giới thiệu phương pháp, baseline, lựa chọn checkpoint và replay quyết định trên mô phỏng 3D. Frontend native dùng chung origin với FastAPI; không cần cài package npm.
+Dashboard nghiên cứu: đăng nhập, giới thiệu phương pháp, baseline, lựa chọn checkpoint và replay quyết định trên mô phỏng 3D. Frontend native dùng chung origin với FastAPI; cài dependency frontend bằng `npm --prefix frontend ci` trước khi build.
 
 ```powershell
 python run_dashboard.py --local-demo
@@ -31,3 +31,9 @@ Source có Random, Greedy, Hungarian và sáu thuật toán RL: MaskablePPO, DQN
 Triển khai production dùng `docker-compose.yml` kết hợp `docker-compose.production.yml`: Caddy HTTPS, FE/API cùng origin và PostgreSQL trong mạng nội bộ. Cần domain/hosting thật và bộ private artifact; clone Git không tự chứa dữ liệu/checkpoint. Trạng thái Docker/runtime/public deployment được ghi rõ trong tài liệu kiểm chứng, không suy ra từ file cấu hình.
 
 Không coi bản demo/bản thảo là deployment production hoặc hồ sơ đã được trường phê duyệt. Chưa commit/push các thay đổi phiên này.
+
+## Bản triển khai hiện hành
+
+Ứng dụng: https://unimatch-neu.vercel.app. FE Vercel, API Render và Neon được cấu hình từ một repository `namhv521/UniMatch`; lịch ping nằm trong `.github/workflows/keepalive.yml`. Xem [trạng thái và bằng chứng triển khai](docs/cloud_deployment_status.md).
+
+Frontend dùng Three.js 0.186.1 tự phục vụ. Trước khi build chạy `npm --prefix frontend ci`, sau đó `npm --prefix frontend run build`. Bộ inference private được nạp từ PostgreSQL, không được công bố trong Git.

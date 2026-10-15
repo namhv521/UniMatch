@@ -146,3 +146,13 @@ test('replay seeking and invalid proposals never inflate 3D advisor loads', () =
   assert.deepEqual(assignmentLoads(replayStateAt(events,3).assignments), {a2:1});
   assert.deepEqual(assignmentLoads(replayStateAt(events,1).assignments), {a1:1});
 });
+test("Canvas fallback releases pointer and window listeners on route disposal", () => {
+  const { canvas, handlers, windowHandlers } = inputSurface();
+  canvas.removeEventListener = type => handlers.delete(type);
+  canvas.ownerDocument.defaultView.removeEventListener = type => windowHandlers.delete(type);
+  const scene = new MatchingScene(canvas);
+  assert.ok(handlers.size > 0);
+  scene.dispose();
+  assert.equal(handlers.size, 0);
+  assert.equal(windowHandlers.size, 0);
+});

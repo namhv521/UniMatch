@@ -59,6 +59,8 @@ export class MatchingScene {
       const load = this.loads[id] || 0, capacity = Number(advisor.data.capacity) || 1;
       const height = .08 + Math.min(load / capacity, 1) * 1.6;
       advisor.fill.scale.y = height; advisor.fill.position.y = height / 2 + .06;
+      if (advisor.label && advisor.load === load) continue;
+      advisor.load = load;
       if (advisor.label) { advisor.label.parent.remove(advisor.label); disposeTree(advisor.label); }
       advisor.label = textSprite(`${advisor.data.label || id} · ${load}/${capacity}`, load >= capacity ? '#ffd18a' : '#bcf7e7', data.advisors.length > 12 ? .22 : .4);
       advisor.label.position.copy(advisor.position).add(new THREE.Vector3(0, 2.35, 0)); this.profiles.add(advisor.label);
@@ -110,5 +112,5 @@ export class MatchingScene {
   }
   draw() { this.fallback ? this.fallback.draw() : this.stage?.draw(); }
   resetView() { if (this.fallback) this.fallback.resetView(); else { this.stage.root.rotation.set(0, 0, 0); this.stage.reset(); } }
-  dispose() { this.canvas.removeEventListener('click', this.click); this.canvas.removeEventListener('keydown', this.key); this.stage?.dispose(); }
+  dispose() { this.canvas.removeEventListener('click', this.click); this.canvas.removeEventListener('keydown', this.key); this.stage?.dispose(); this.fallback?.dispose(); }
 }
