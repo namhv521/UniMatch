@@ -1,0 +1,41 @@
+schema_version: '1.0'
+taxonomy_version: '1.0'
+status: draft_pending_owner_review
+purpose: Proposed matching signals; unavailable for release until taxonomy, source review and Phase 4 evaluation pass.
+similarity_inputs:
+  student_text: [thesis_title, thesis_abstract, thesis_keywords]
+  advisor_text: [research_description]
+  tags:
+    - research_domain_tags
+    - topic_tags
+    - expertise_topic_tags
+    - programming_languages
+    - frameworks_libraries
+    - databases
+    - ml_ai_methods
+    - data_engineering_tools
+    - cloud_devops_tools
+    - security_network_tools
+    - software_engineering_methods
+    - research_methods
+    - math_statistics_topics
+  verified_personal_skills: [skills_tags]
+  confirmed_preferences: [preferred_advisor_ids, preferred_research_topics]
+conditions:
+  text: Only reviewed content; remove identity/contact/author metadata before feature fitting. Fit vocabulary and IDF on training data only.
+  tags: Require exact evidence references and review; inferred_from_thesis remains topic/technology evidence and never personal proficiency.
+  verified_personal_skills: Require explicit skill evidence; a thesis mention alone is insufficient.
+  confirmed_preferences: Require confirmed student input. Resolve preferred advisor IDs to preference indicators; never embed the identifier itself.
+  missing_values: Preserve missingness. Do not fill unknown proficiency or preferences with fabricated values.
+evidence_quality_weights: [skill_confidence, expertise_confidence]
+evidence_quality_policy: Evidence confidence may weight an evidenced signal; it is not skill mastery and must not be fabricated.
+hard_constraints_only:
+  - active_for_semester
+  - capacity_max
+  - capacity_min
+  - target_load
+  - existing_load
+  - eligibility_flags
+  - eligible_program_codes
+  - supervision_restrictions
+hard_constraint_policy: Verified semester policy or explicitly selected simulation policy; never a similarity feature.

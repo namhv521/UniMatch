@@ -1,0 +1,6 @@
+# Offline CPU worker; keep production web environment separate.
+-r requirements-rebuild.txt
+torch==2.8.0
+gymnasium==0.29.1
+stable-baselines3==2.3.2
+sb3-contrib==2.3.0

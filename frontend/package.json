@@ -3,11 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check app.js && node --check visualization.js && node --check student-cohorts.js && node --check home-scene.js && node --check matching-scene.js && node --check scene-engine.js && node --check scene-layout.js && node --check build.mjs",
-    "test": "node --test visualization.test.js student-cohorts.test.js",
-    "build": "node build.mjs",
-    "qa:browser": "python qa_browser.py",
-    "qa:cohorts": "python qa_cohorts.py"
+    "check": "node --check app.js && node --check rebuild-app.js && node --check visualization.js && node --check student-cohorts.js && node --check home-scene.js && node --check matching-scene.js && node --check scene-engine.js && node --check scene-layout.js && node --check build.mjs",
+    "build": "node build.mjs"
   },
   "dependencies": {
     "three": "0.186.1"

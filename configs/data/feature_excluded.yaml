@@ -1,0 +1,30 @@
+schema_version: '1.0'
+status: draft_pending_owner_review
+purpose: Fields retained for audit/join/authorization, excluded from numeric or semantic matching features.
+identifier_fields: [student_id, student_name, advisor_id, advisor_name, application_id, source_id, block_id, candidate_id, semester_id]
+contact_fields: [email, phone, address, public_contact_url, contacts_attribution_only]
+provenance_fields:
+  - source_type
+  - source_file
+  - source_page
+  - source_url
+  - source_sha256
+  - profile_url
+  - project_evidence_urls
+  - publications_urls
+  - extracted_at
+  - crawled_at
+  - retrieved_at
+  - archive_chain
+  - skill_evidence_refs
+  - expertise_evidence_refs
+  - reviewer_notes
+  - review_status
+protected_or_unvalidated_proxies: [age, birth_date, gender, ethnicity, religion, disability, family_income, gpa]
+policy_scoped_fields: [program_code, cohort_year, department, academic_title, degree, consent_status]
+policy_scope: Program/semester fields may gate eligibility, access or evaluation slices only with an explicit policy; they do not rate individual quality.
+raw_text_restrictions:
+  - Raw document text and raw faculty profile_text are not automatically approved feature inputs.
+  - Strip names, IDs, contacts, author lists and provenance from reviewed text before matching.
+  - Keep evidence snippets outside learned input vectors; use them only to validate and explain approved signals.
+preference_exception: preferred_advisor_ids may be joined to a confirmed preference signal under feature_allowlist.yaml, never encoded as identifier values.

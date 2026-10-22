@@ -7,7 +7,8 @@
 *.p12
 
 # Private source data and generated ML artifacts
-data/
+/data/
+data_rebuild/
 outputs/
 baocao/**/*.pdf
 baocao/**/*.docx

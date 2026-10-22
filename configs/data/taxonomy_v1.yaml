@@ -1,0 +1,183 @@
+schema_version: '1.0'
+taxonomy_version: '1.0'
+status: draft_pending_owner_review
+source_contract: docs/UniMatch_Feature_Data_Dictionary.md
+semantics: Mentions identify source concepts only; they do not prove personal skill, expertise proficiency or supervision eligibility.
+normalization: Unicode NFC for matching; preserve original text and offsets.
+stopwords: [ai, ml, r]
+abbreviation_policy: Ambiguous AI/ML require uppercase; R requires a programming phrase. No implicit hierarchy expansion.
+groups:
+  research_domain_tags:
+    ai:
+      aliases: [artificial intelligence, trí tuệ nhân tạo]
+      case_sensitive_aliases: [AI]
+    data_science:
+      aliases: [data science, khoa học dữ liệu]
+    software_engineering:
+      aliases: [software engineering, kỹ thuật phần mềm, công nghệ phần mềm]
+    information_systems:
+      aliases: [information systems, information system, hệ thống thông tin]
+    cybersecurity:
+      aliases: [cybersecurity, cyber security, an ninh mạng, an toàn thông tin]
+    networks_iot:
+      aliases: [computer networks, mạng máy tính, internet of things, internet vạn vật, IoT]
+    business_analytics:
+      aliases: [business analytics, phân tích kinh doanh]
+  topic_tags:
+    machine_learning:
+      aliases: [machine learning, học máy]
+      case_sensitive_aliases: [ML]
+    computer_vision:
+      aliases: [computer vision, thị giác máy tính]
+    nlp:
+      aliases: [natural language processing, xử lý ngôn ngữ tự nhiên, xử lí ngôn ngữ tự nhiên, NLP]
+    llm:
+      aliases: [large language model, large language models, mô hình ngôn ngữ lớn, LLM, LLMs]
+    reinforcement_learning:
+      aliases: [reinforcement learning, học tăng cường]
+    time_series:
+      aliases: [time series, chuỗi thời gian]
+    recommendation_systems:
+      aliases: [recommendation system, recommendation systems, recommender system, hệ gợi ý, hệ thống gợi ý, hệ khuyến nghị]
+    optimization:
+      aliases: [optimization, optimisation, tối ưu hóa, tối ưu hoá]
+  programming_languages:
+    python:
+      aliases: [Python]
+    java:
+      aliases: [Java]
+    javascript:
+      aliases: [JavaScript, Java Script, JS]
+    typescript:
+      aliases: [TypeScript]
+    cpp:
+      aliases: ['C++', 'C++11', 'C++14', 'C++17', 'C++20', cpp, C plus plus]
+    csharp:
+      aliases: ['C#', CSharp, C Sharp]
+    r:
+      aliases: [R programming, ngôn ngữ R, lập trình R]
+    sql:
+      aliases: [SQL, structured query language, ngôn ngữ truy vấn có cấu trúc]
+  frameworks_libraries:
+    pytorch:
+      aliases: [PyTorch, Py Torch]
+    tensorflow:
+      aliases: [TensorFlow, Tensor Flow]
+    scikit_learn:
+      aliases: [scikit-learn, scikit learn, sklearn]
+    fastapi:
+      aliases: [FastAPI, Fast API]
+    django:
+      aliases: [Django]
+    react:
+      aliases: [ReactJS, React.js, React framework, React Native]
+      case_sensitive_aliases: [React]
+    spring:
+      aliases: [Spring Framework, Spring Boot, Spring MVC]
+  databases:
+    postgresql:
+      aliases: [PostgreSQL, Postgres]
+    mysql:
+      aliases: [MySQL]
+    mongodb:
+      aliases: [MongoDB, Mongo DB]
+    redis:
+      aliases: [Redis]
+    neo4j:
+      aliases: [Neo4j]
+    sqlite:
+      aliases: [SQLite]
+  ml_ai_methods:
+    classification:
+      aliases: [classification, phân loại, phân lớp]
+    regression:
+      aliases: [regression, hồi quy]
+    computer_vision:
+      aliases: [computer vision, thị giác máy tính]
+    nlp:
+      aliases: [natural language processing, xử lý ngôn ngữ tự nhiên, xử lí ngôn ngữ tự nhiên, NLP]
+    llm:
+      aliases: [large language model, large language models, mô hình ngôn ngữ lớn, LLM, LLMs]
+    reinforcement_learning:
+      aliases: [reinforcement learning, học tăng cường]
+    time_series:
+      aliases: [time series, chuỗi thời gian]
+    recommendation_systems:
+      aliases: [recommendation system, recommendation systems, recommender system, hệ gợi ý, hệ thống gợi ý, hệ khuyến nghị]
+    optimization:
+      aliases: [optimization, optimisation, tối ưu hóa, tối ưu hoá]
+  data_engineering_tools:
+    spark:
+      aliases: [Apache Spark, PySpark]
+      case_sensitive_aliases: [Spark]
+    airflow:
+      aliases: [Apache Airflow]
+      case_sensitive_aliases: [Airflow]
+    kafka:
+      aliases: [Apache Kafka]
+      case_sensitive_aliases: [Kafka]
+    dbt:
+      aliases: [dbt, data build tool]
+    etl:
+      aliases: [ETL, extract transform load, trích xuất biến đổi nạp]
+    data_warehouse:
+      aliases: [data warehouse, kho dữ liệu]
+  cloud_devops_tools:
+    docker:
+      aliases: [Docker]
+    kubernetes:
+      aliases: [Kubernetes, K8s]
+    aws:
+      aliases: [Amazon Web Services, AWS]
+    gcp:
+      aliases: [Google Cloud Platform, GCP]
+    azure:
+      aliases: [Microsoft Azure, Azure]
+    ci_cd:
+      aliases: [CI/CD, CI CD, continuous integration continuous delivery]
+    linux:
+      aliases: [Linux]
+  security_network_tools:
+    network_security:
+      aliases: [network security, bảo mật mạng]
+    cryptography:
+      aliases: [cryptography, mật mã học]
+    web_security:
+      aliases: [web security, bảo mật web, an toàn ứng dụng web]
+    networking:
+      aliases: [computer networking, mạng máy tính]
+    iot_security:
+      aliases: [IoT security, bảo mật IoT, bảo mật internet vạn vật]
+  software_engineering_methods:
+    testing:
+      aliases: [software testing, kiểm thử phần mềm]
+    software_architecture:
+      aliases: [software architecture, kiến trúc phần mềm]
+    api_design:
+      aliases: [API design, thiết kế API]
+    agile:
+      aliases: [Agile]
+    uml:
+      aliases: [UML, unified modeling language, ngôn ngữ mô hình hóa thống nhất]
+  research_methods:
+    literature_review:
+      aliases: [literature review, tổng quan tài liệu, tổng quan nghiên cứu]
+    experiment_design:
+      aliases: [experiment design, experimental design, thiết kế thí nghiệm, thiết kế thực nghiệm]
+    survey:
+      aliases: [survey research, phương pháp khảo sát, nghiên cứu khảo sát]
+    qualitative_analysis:
+      aliases: [qualitative analysis, phân tích định tính]
+    quantitative_analysis:
+      aliases: [quantitative analysis, phân tích định lượng]
+  math_statistics_topics:
+    probability:
+      aliases: [probability, xác suất]
+    statistics:
+      aliases: [statistics, thống kê]
+    linear_algebra:
+      aliases: [linear algebra, đại số tuyến tính]
+    optimization:
+      aliases: [optimization, optimisation, tối ưu hóa, tối ưu hoá]
+    graph_theory:
+      aliases: [graph theory, lý thuyết đồ thị, lí thuyết đồ thị]
