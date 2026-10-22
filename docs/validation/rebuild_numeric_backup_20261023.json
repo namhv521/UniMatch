@@ -1628,5 +1628,11 @@
   "backup_scope": "Source, configuration, aggregate/per-seed numeric results and checkpoint hashes. Raw documents, personal profiles, runtime data, tokens and model/encoder binaries remain private and are not stored in Git.",
   "not_academic_accuracy": true,
   "convergence_proven": false,
-  "production_promoted": false
+  "production_promoted": false,
+  "test_history": {
+    "phase5_parent_16384_test30_evaluated": true,
+    "continuation_24576_32768_validation29_only": true,
+    "new_selected_checkpoint_independent_test_results_available": false,
+    "warning": "Do not attach parent test30 metrics to the selected higher-step checkpoints. Test30 is not a never-inspected holdout."
+  }
 }
