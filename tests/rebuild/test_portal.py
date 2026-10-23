@@ -92,26 +92,25 @@ def test_training_reports_real_snapshot_without_claiming_convergence(tmp_path, m
     assert 'C:\\' not in json.dumps(value)
 
 
-def test_turnstile_and_oauth_exchange_with_bound_state(tmp_path, monkeypatch):
+def test_oauth_exchange_with_bound_state(tmp_path, monkeypatch):
     import httpx
     app, client = portal(tmp_path, monkeypatch)
-    for key in ('GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'TURNSTILE_SITE_KEY', 'TURNSTILE_SECRET_KEY'):
+    for key in ('GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'):
         monkeypatch.setenv('UNIMATCH_' + key, 'technical-fixture')
     calls = []
     async def post(self, url, **kwargs):
         calls.append((url, kwargs))
-        if 'siteverify' in url:
-            return httpx.Response(200, json={'success': True, 'hostname': 'testserver', 'action': 'login'}, request=httpx.Request('POST', url))
         return httpx.Response(200, json={'access_token': 'provider-secret'}, request=httpx.Request('POST', url))
     async def get(self, url, **kwargs):
         return httpx.Response(200, json={'sub': 'verified-subject', 'name': 'Student'}, request=httpx.Request('GET', url))
     monkeypatch.setattr(httpx.AsyncClient, 'post', post)
     monkeypatch.setattr(httpx.AsyncClient, 'get', get)
-    started = client.post('/api/auth/start/google', json={'turnstile_token': 'challenge'})
+    started = client.post('/api/auth/start/google', json={})
     assert started.status_code == 200
     from urllib.parse import parse_qs, urlparse
     params = parse_qs(urlparse(started.json()['url']).query)
     assert params['code_challenge_method'] == ['S256']
+    assert all('siteverify' not in url for url, _ in calls)
     callback = '/api/auth/callback/google?state=' + params['state'][0] + '&code=code'
     response = client.get(callback, follow_redirects=False)
     assert response.status_code == 303 and response.headers['location'] == '/landing.html'
@@ -121,17 +120,22 @@ def test_turnstile_and_oauth_exchange_with_bound_state(tmp_path, monkeypatch):
     assert 'provider-secret' not in response.text
 
 
-def test_expired_session_and_wrong_turnstile_hostname_fail_closed(tmp_path, monkeypatch):
-    import httpx
+def test_auth_start_rate_limit(tmp_path, monkeypatch):
+    monkeypatch.setenv('UNIMATCH_AUTH_START_RATE_LIMIT', '2')
+    for key in ('GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET'):
+        monkeypatch.setenv('UNIMATCH_' + key, 'technical-fixture')
+    app, client = portal(tmp_path, monkeypatch)
+    assert client.post('/api/auth/start/github', json={}).status_code == 200
+    assert client.post('/api/auth/start/github', json={}).status_code == 200
+    limited = client.post('/api/auth/start/github', json={})
+    assert limited.status_code == 429
+    assert limited.headers['retry-after'] == '60'
+
+
+def test_expired_session_is_rejected(tmp_path, monkeypatch):
     app, client = portal(tmp_path, monkeypatch)
     token = app.state.portal_store.create_session('github', 'x', 'A')
     with app.state.portal_store.connect() as db:
         db.execute('UPDATE sessions SET expires=?', (time.time()-1,))
     client.cookies.set('unimatch_session', token)
     assert client.get('/api/auth/me').status_code == 401
-    for key in ('GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'TURNSTILE_SITE_KEY', 'TURNSTILE_SECRET_KEY'):
-        monkeypatch.setenv('UNIMATCH_' + key, 'technical-fixture')
-    async def post(self, url, **kwargs):
-        return httpx.Response(200, json={'success': True, 'hostname': 'evil.example', 'action': 'login'}, request=httpx.Request('POST', url))
-    monkeypatch.setattr(httpx.AsyncClient, 'post', post)
-    assert client.post('/api/auth/start/github', json={'turnstile_token': 'challenge'}).status_code == 400

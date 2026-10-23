@@ -28,7 +28,7 @@ services:
         sync: false
       - key: UNIMATCH_FACEBOOK_CLIENT_SECRET
         sync: false
-      - key: UNIMATCH_TURNSTILE_SITE_KEY
-        sync: false
-      - key: UNIMATCH_TURNSTILE_SECRET_KEY
-        sync: false
+      - key: UNIMATCH_AUTH_START_RATE_LIMIT
+        value: 10
+      - key: UNIMATCH_AUTH_START_RATE_WINDOW_SECONDS
+        value: 60

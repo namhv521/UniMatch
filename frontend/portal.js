@@ -22,9 +22,9 @@ async function login() {
   try {
     if ((await fetch('/api/auth/me')).ok) { location.replace('./landing.html'); return; }
   } catch { $('auth-notice').textContent='Không kết nối được dịch vụ đăng nhập. Kiểm tra mạng và tải lại trang.'; return; }
-  let config, challenge = '', widget;
+  let config;
   const buttons = [...document.querySelectorAll('[data-provider]')];
-  function availability() { buttons.forEach(button => { button.disabled = !config?.providers[button.dataset.provider] || !challenge; }); }
+  function availability() { buttons.forEach(button => { button.disabled = !config?.providers[button.dataset.provider]; }); }
   for (const tab of [$('login-tab'), $('register-tab')]) {
     tab.addEventListener('click', () => {
       const register = tab.id === 'register-tab';
@@ -39,18 +39,15 @@ async function login() {
   try {
     const response = await fetch('/api/auth/config'); if (!response.ok) throw new Error(); config = await response.json();
     const missing = Object.entries(config.providers).filter(([,ready]) => !ready).map(([provider]) => ({google:'Google',github:'GitHub',facebook:'Facebook'}[provider]));
-    $('auth-notice').textContent = missing.length ? `Chưa cấu hình đăng nhập ${missing.join(', ')}. Người quản trị cần bổ sung cấu hình dịch vụ.` : 'Xác minh bên dưới rồi chọn tài khoản của bạn.';
-    if (config.turnstile_site_key) {
-      window.unimatchTurnstileReady = () => { widget = window.turnstile.render('#turnstile', {sitekey:config.turnstile_site_key, action:'login', callback:token => { challenge = token; availability(); }, 'expired-callback':() => {challenge='';availability();}, 'error-callback':() => {challenge='';availability();$('auth-status').textContent='Xác minh bot chưa thành công. Hãy tải lại trang.';}}); };
-      const script = document.createElement('script'); script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=unimatchTurnstileReady&render=explicit'; script.async = true; script.onerror = () => { $('auth-status').textContent = 'Không tải được xác minh Cloudflare. Kiểm tra mạng và tải lại trang.'; }; document.head.append(script);
-    }
+    $('auth-notice').textContent = missing.length ? `Chưa cấu hình đăng nhập ${missing.join(', ')}. Người quản trị cần bổ sung cấu hình dịch vụ.` : 'Chọn tài khoản để tiếp tục.';
+    availability();
     buttons.forEach(button => button.addEventListener('click', async () => {
       buttons.forEach(item => {item.disabled=true;}); $('auth-status').textContent='Đang chuyển đến dịch vụ đăng nhập…';
       try {
-        const response = await fetch(`/api/auth/start/${button.dataset.provider}`, {method:'POST', headers:{'Content-Type':'application/json'},body:JSON.stringify({turnstile_token:challenge})});
+        const response = await fetch(`/api/auth/start/${button.dataset.provider}`, {method:'POST', headers:{'Content-Type':'application/json'},body:'{}'});
         const result = await response.json(); if (!response.ok) throw new Error();
         const url = new URL(result.url); if (!['accounts.google.com','github.com','www.facebook.com'].includes(url.hostname) || url.protocol !== 'https:') throw new Error(); location.assign(url.href);
-      } catch { challenge=''; availability(); if (widget !== undefined) window.turnstile.reset(widget); $('auth-status').textContent='Không thể bắt đầu đăng nhập. Hãy xác minh lại và thử lần nữa.'; }
+      } catch { availability(); $('auth-status').textContent='Không thể bắt đầu đăng nhập. Hãy thử lại sau ít phút.'; }
     }));
   } catch { $('auth-notice').textContent='Không tải được cấu hình đăng nhập. Kiểm tra dịch vụ và tải lại trang.'; }
 }

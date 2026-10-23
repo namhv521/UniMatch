@@ -5,7 +5,9 @@ import hmac
 import json
 import os
 import secrets
+import threading
 import time
+from collections import deque
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
@@ -27,6 +29,41 @@ PROVIDERS = {
 
 def hashed(value):
     return hashlib.sha256(value.encode()).hexdigest()
+
+
+class AuthStartRateLimiter:
+    """Bound OAuth-start requests per direct client IP in a sliding window."""
+    def __init__(self, limit, window_seconds):
+        self.limit = limit
+        self.window_seconds = window_seconds
+        self.requests = {}
+        self.lock = threading.Lock()
+
+    def allow(self, client_ip):
+        now = time.monotonic()
+        cutoff = now - self.window_seconds
+        with self.lock:
+            for key, timestamps in list(self.requests.items()):
+                while timestamps and timestamps[0] <= cutoff:
+                    timestamps.popleft()
+                if not timestamps:
+                    del self.requests[key]
+            timestamps = self.requests.setdefault(client_ip, deque())
+            if len(timestamps) >= self.limit:
+                return False
+            timestamps.append(now)
+            return True
+
+
+def auth_start_rate_limiter():
+    try:
+        limit = int(os.environ.get('UNIMATCH_AUTH_START_RATE_LIMIT', '10'))
+        window_seconds = int(os.environ.get('UNIMATCH_AUTH_START_RATE_WINDOW_SECONDS', '60'))
+    except ValueError:
+        raise ValueError('invalid_auth_start_rate_limit') from None
+    if not 1 <= limit <= 1000 or not 1 <= window_seconds <= 3600:
+        raise ValueError('invalid_auth_start_rate_limit')
+    return AuthStartRateLimiter(limit, window_seconds)
 
 
 class PortalStore:
@@ -73,6 +110,7 @@ def install_portal(app):
     from .portal_database import database_location
     store = PortalStore(database_location())
     app.state.portal_store = store
+    app.state.portal_auth_start_rate_limiter = auth_start_rate_limiter()
     router = APIRouter()
     origin = os.environ.get('UNIMATCH_PUBLIC_ORIGIN', 'http://127.0.0.1:8767').rstrip('/')
     parsed = urlparse(origin)
@@ -99,14 +137,11 @@ def install_portal(app):
 
     def provider_ready(provider):
         return bool(os.environ.get(f'UNIMATCH_{provider.upper()}_CLIENT_ID')
-                    and os.environ.get(f'UNIMATCH_{provider.upper()}_CLIENT_SECRET')
-                    and os.environ.get('UNIMATCH_TURNSTILE_SITE_KEY')
-                    and os.environ.get('UNIMATCH_TURNSTILE_SECRET_KEY'))
+                    and os.environ.get(f'UNIMATCH_{provider.upper()}_CLIENT_SECRET'))
 
     @router.get('/api/auth/config')
     def config():
-        return {'providers': {key: provider_ready(key) for key in PROVIDERS},
-                'turnstile_site_key': os.environ.get('UNIMATCH_TURNSTILE_SITE_KEY', '')}
+        return {'providers': {key: provider_ready(key) for key in PROVIDERS}}
 
     @router.get('/api/auth/me')
     def me(request: Request):
@@ -126,29 +161,10 @@ def install_portal(app):
         check_origin(request)
         if provider not in PROVIDERS or not provider_ready(provider):
             raise HTTPException(503, 'social_login_not_configured')
-        raw = b''
-        async for part in request.stream():
-            raw += part
-            if len(raw) > 8192:
-                raise HTTPException(413, 'auth_request_too_large')
-        try:
-            payload = json.loads(raw)
-            challenge = payload['turnstile_token']
-            if not isinstance(challenge, str) or not 1 <= len(challenge) <= 2048:
-                raise ValueError()
-        except (ValueError, TypeError, KeyError):
-            raise HTTPException(400, 'bot_verification_required') from None
-        try:
-            async with httpx.AsyncClient(timeout=15) as client:
-                result = await client.post('https://challenges.cloudflare.com/turnstile/v0/siteverify',
-                    data={'secret': os.environ['UNIMATCH_TURNSTILE_SECRET_KEY'], 'response': challenge})
-                result.raise_for_status()
-                verification = result.json()
-            if (verification.get('success') is not True or verification.get('hostname') != parsed.hostname
-                    or verification.get('action') != 'login'):
-                raise HTTPException(400, 'bot_verification_failed')
-        except (httpx.HTTPError, ValueError):
-            raise HTTPException(503, 'bot_verification_unavailable') from None
+        client_ip = request.client.host if request.client else 'unknown'
+        if not app.state.portal_auth_start_rate_limiter.allow(client_ip):
+            raise HTTPException(429, 'auth_start_rate_limited', headers={
+                'Retry-After': str(app.state.portal_auth_start_rate_limiter.window_seconds)})
         verifier = secrets.token_urlsafe(48)
         state = store.create_pending(provider, verifier)
         params = {'client_id': os.environ[f'UNIMATCH_{provider.upper()}_CLIENT_ID'],

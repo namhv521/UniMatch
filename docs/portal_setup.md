@@ -16,7 +16,7 @@ python scripts/serve_github_unimatch_local.py --bundle data_rebuild/github_rebui
 
 Mở `http://127.0.0.1:8768/login.html`. Entrypoint này vẫn chỉ bind loopback. Thay đổi giao diện không đồng nghĩa đã triển khai public.
 
-## OAuth và Cloudflare Turnstile
+## OAuth và giới hạn đăng nhập
 
 Khai báo environment variables trước khi chạy Python; launcher không tự đọc `.env`. Tên biến có trong `.env.example`:
 
@@ -24,15 +24,15 @@ Khai báo environment variables trước khi chạy Python; launcher không tự
 - `UNIMATCH_GOOGLE_CLIENT_ID`, `UNIMATCH_GOOGLE_CLIENT_SECRET`.
 - `UNIMATCH_GITHUB_CLIENT_ID`, `UNIMATCH_GITHUB_CLIENT_SECRET`.
 - `UNIMATCH_FACEBOOK_CLIENT_ID`, `UNIMATCH_FACEBOOK_CLIENT_SECRET`.
-- `UNIMATCH_TURNSTILE_SITE_KEY`, `UNIMATCH_TURNSTILE_SECRET_KEY`.
+- `UNIMATCH_AUTH_START_RATE_LIMIT` (mặc định `10`) và `UNIMATCH_AUTH_START_RATE_WINDOW_SECONDS` (mặc định `60`) giới hạn số lần bắt đầu OAuth theo IP kết nối trực tiếp.
 
-Đăng ký callback tại từng provider: `<origin>/api/auth/callback/google`, `/github`, `/facebook`. Cấu hình hostname Turnstile trùng hostname origin. Backend bắt buộc kiểm tra Siteverify thành công, hostname và action `login`. Không đưa client secret hoặc Turnstile secret vào frontend. Với Facebook, implementation sử dụng Graph API v23.0; cần kiểm tra cấu hình/quyền ứng dụng thực tế khi kích hoạt.
+Đăng ký callback tại từng provider: `<origin>/api/auth/callback/google`, `<origin>/api/auth/callback/github`, `<origin>/api/auth/callback/facebook`. Không đưa client secret vào frontend. Endpoint bắt đầu OAuth được giới hạn theo IP và bảo vệ bởi kiểm tra same-origin; limiter trong tiến trình phù hợp cho một instance/worker. Khi chạy nhiều instance hoặc worker, thay bằng Redis hay rate limit tại reverse proxy. Với Facebook, implementation sử dụng Graph API v23.0; cần kiểm tra cấu hình/quyền ứng dụng thực tế khi kích hoạt.
 
 Đăng ký và đăng nhập cùng dùng danh tính provider; lần đầu tạo user trong SQLite, các lần sau dùng lại đúng provider/subject. Không tự nối tài khoản theo email. OAuth state có thời hạn năm phút, dùng một lần và được ràng buộc với cookie trình duyệt. Google/GitHub dùng PKCE. Provider access token chỉ dùng phía backend để lấy danh tính, không gửi tới browser hoặc lưu vào SQLite.
 
-Phiên UniMatch dùng cookie HttpOnly, SameSite=Lax, thời hạn tám giờ; Secure khi origin là HTTPS. SQLite mặc định ở `data_rebuild/runtime/portal.sqlite3`, ngoài thư mục frontend. Có thể đổi bằng `UNIMATCH_AUTH_DB`. Phiên được băm trong DB; scope hồ sơ/kết quả gắn với user. Bearer token cũ chỉ còn dành cho script vận hành. Khi thiếu cấu hình, nút provider bị khóa và giao diện nói rõ lý do; không có đăng nhập giả hoặc nút bỏ qua bot.
+Phiên UniMatch dùng cookie HttpOnly, SameSite=Lax, thời hạn tám giờ; Secure khi origin là HTTPS. SQLite mặc định ở `data_rebuild/runtime/portal.sqlite3`, ngoài thư mục frontend. Có thể đổi bằng `UNIMATCH_AUTH_DB`. Phiên được băm trong DB; scope hồ sơ/kết quả gắn với user. Bearer token cũ chỉ còn dành cho script vận hành. Khi thiếu cấu hình, nút provider bị khóa và giao diện nói rõ lý do; không có đăng nhập giả.
 
-Tham khảo: [Google server OAuth](https://developers.google.com/identity/protocols/oauth2/web-server), [GitHub OAuth](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps), [Facebook manual login](https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow/), [Cloudflare server-side validation](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/).
+Tham khảo: [Google server OAuth](https://developers.google.com/identity/protocols/oauth2/web-server), [GitHub OAuth](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps), [Facebook manual login](https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow/).
 
 ## Dữ liệu huấn luyện và chatbot
 
@@ -42,7 +42,7 @@ Chatbot là hội thoại tra cứu theo quy tắc và nguồn đã duyệt, kh�
 
 ## Kiểm chứng và giới hạn
 
-Kiểm tra API, security, assistant, OAuth giả lập và launcher: 65 passed, 1 skipped ở lượt kiểm tra cuối. Browser dùng danh tính QA tổng hợp tạo trực tiếp trong kho phiên để kiểm tra UI; không phải bằng chứng đăng nhập Google/GitHub/Facebook thật. OAuth và Turnstile cần khóa thực và kiểm chứng nhà cung cấp trước khi sử dụng.
+Kiểm tra API, security, assistant, OAuth giả lập và launcher: 65 passed, 1 skipped ở lượt kiểm tra cuối. Browser dùng danh tính QA tổng hợp tạo trực tiếp trong kho phiên để kiểm tra UI; không phải bằng chứng đăng nhập Google/GitHub/Facebook thật. OAuth cần client ID/secret thực và kiểm chứng nhà cung cấp trước khi sử dụng.
 
 Smoke browser: nhập ba hồ sơ kiểm thử có đề tài tiếng Việt, chọn một giảng viên có dữ liệu phù hợp, chạy đủ ba thuật toán, xem trace ba bước, hỏi CV/NLP/câu ngoài phạm vi và xuất CSV. Kết quả trên ba hồ sơ này không phải benchmark chất lượng mô hình. Mẫu hoàn toàn ngoài vocabulary có thể không phân bổ được; UI giữ kết quả không khả thi.
 

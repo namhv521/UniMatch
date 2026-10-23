@@ -38,7 +38,7 @@ UNIMATCH_MODEL_BUNDLE=github-20261023-v1
 UNIMATCH_MODEL_BUNDLE_SHA256=<SHA-256 từ publish>
 ```
 
-Thêm OAuth/Turnstile theo `docs/portal_setup.md`. Khi dùng origin Render trực tiếp, callback là `<render-origin>/api/auth/callback/{google|github|facebook}`. Khi dùng Vercel, callback và hostname Turnstile chuyển sang origin Vercel. Không dùng tùy ý header proxy để quyết định origin OAuth.
+Thêm OAuth và giới hạn đăng nhập theo `docs/portal_setup.md`. Khi dùng origin Render trực tiếp, callback là `<render-origin>/api/auth/callback/{google|github|facebook}`. Khi dùng Vercel, callback OAuth chuyển sang origin Vercel. Không dùng tùy ý header proxy để quyết định origin OAuth.
 
 Start command đã nằm trong Dockerfile: `uvicorn backend.app.production:create_app --factory`, bind `0.0.0.0`, port theo `PORT`, một worker. Production từ chối public bearer token cũ; chỉ chấp nhận cookie phiên, kiểm tra Origin cho POST. SQLite chỉ còn cho local/test.
 
@@ -47,7 +47,7 @@ Start command đã nằm trong Dockerfile: `uvicorn backend.app.production:creat
 1. Root directory `frontend`, build `npm run build`, output `dist`.
 2. Lấy URL Render từ kết quả deploy thật; cập nhật destination `/api/:path*` trong `frontend/vercel.json` thành `<render-origin>/api/:path*`.
 3. Đặt `UNIMATCH_API_ORIGIN=<render-origin>` trên Vercel. Build kiểm tra origin HTTPS và rewrite khớp; thiếu/mismatch thì không phát hành frontend mới vào API cũ.
-4. Đặt `UNIMATCH_PUBLIC_ORIGIN` trên Render bằng origin Vercel và cập nhật callback OAuth/Turnstile. Sau đó kiểm tra cookie, đăng xuất, import, compare/export và chat qua Vercel.
+4. Đặt `UNIMATCH_PUBLIC_ORIGIN` trên Render bằng origin Vercel và cập nhật callback OAuth. Sau đó kiểm tra cookie, đăng xuất, import, compare/export và chat qua Vercel.
 
 Rewrite cũ trong repository là dữ liệu lịch sử; không coi URL đó là backend mới đã được kiểm chứng.
 
@@ -70,8 +70,8 @@ CI chạy fixture PostgreSQL 16, suite hợp đồng, frontend check/build và b
 - Neon project `unimatch` (`patient-tree-18935199`), branch `production`, database `neondb`, schema `unimatch_portal`: 35 advisors, 1 catalog, 1 model bundle. Các bảng `public` cũ được giữ nguyên.
 - Release `github-20261023-v1`: 6.220.361 bytes, SHA-256 `db88f3b2ebee91efdc4129699384b97657911a48379f9cba70aa57a9e0040ff5`; SQL và public health khớp nhau.
 - [CI 39877003357](https://github.com/namhv521/UniMatch/actions/runs/39877003357) thành công: 486 tests passed, 1 skipped; gồm PostgreSQL 16 và Docker Linux.
-- Google/GitHub/Facebook OAuth và Cloudflare Turnstile đang cấu hình, chưa có bằng chứng đăng nhập nhà cung cấp thật. Chưa xác nhận phiên/hồ sơ qua redeploy hoặc luồng so sánh trên production. Vercel chưa chuyển sang backend mới.
-- Đã tạo GitHub OAuth app `3956407` (callback `/api/auth/callback/github`), Google Cloud project UniMatch `fit-visitor-512500-p9`, và Meta app UniMatch `1135265135823111` (miền production, hạng mục Giáo dục). GitHub/Meta yêu cầu chủ tài khoản tự xác minh để lấy secret; Google còn chấp nhận User Data Policy; Cloudflare chờ đăng nhập. Meta còn yêu cầu chính sách riêng tư, hướng dẫn xóa dữ liệu, icon, xác minh doanh nghiệp và xét duyệt trước khi phát hành.
+- Google/GitHub/Facebook OAuth đang cấu hình, chưa có bằng chứng đăng nhập nhà cung cấp thật. Chưa xác nhận phiên/hồ sơ qua redeploy hoặc luồng so sánh trên production. Vercel chưa chuyển sang backend mới.
+- Đã tạo GitHub OAuth app `3956407` (callback `/api/auth/callback/github`), Google Cloud project UniMatch `fit-visitor-512500-p9`, và Meta app UniMatch `1135265135823111` (miền production, hạng mục Giáo dục). GitHub/Meta yêu cầu chủ tài khoản tự xác minh để lấy secret; Google còn chấp nhận User Data Policy. Meta còn yêu cầu chính sách riêng tư, hướng dẫn xóa dữ liệu, icon, xác minh doanh nghiệp và xét duyệt trước khi phát hành.
 
 Đưa ứng dụng lên public không phải chứng nhận chất lượng checkpoint: health vẫn ghi `research_models=true`, `production_promoted=false`.
 
