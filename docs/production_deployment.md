@@ -62,6 +62,17 @@ Rewrite cũ trong repository là dữ liệu lịch sử; không coi URL đó l�
 
 CI chạy fixture PostgreSQL 16, suite hợp đồng, frontend check/build và build Docker CPU. Integration CI dùng database disposable riêng, không sử dụng Neon production. Local đã qua 484 tests, 3 skipped (gồm hai bài PostgreSQL cần database test riêng). Docker daemon local hiện không hoạt động; build Linux và PostgreSQL được giao cho CI để kiểm chứng độc lập.
 
-Chỉ source code lên GitHub chưa phải deploy thành công. Cần kết nối tài khoản Neon/Render/Vercel, thiết lập secrets, thực sự publish model và kiểm tra URL public trước khi xác nhận hoàn tất.
+## Trạng thái đã kiểm chứng ngày 23/10/2026
+
+- Website: https://unimatch-portal.onrender.com, Render service `srv-dbdalafavr4c739d2gu0`, Docker Free tại Singapore; frontend và API cùng origin.
+- Deployment `dep-dbdalanavr4c739d2in0` của commit `ff4f2ccaf5f3d79b91f72508fe69c435646f6a0b` đã báo Live. Chrome mở được trang đăng nhập, không ghi nhận lỗi console.
+- `/health` trả `status=ready`, `storage=postgresql`, `data_loaded=true`, 35 giảng viên, mô hình `dqn` và `ppo`.
+- Neon project `unimatch` (`patient-tree-18935199`), branch `production`, database `neondb`, schema `unimatch_portal`: 35 advisors, 1 catalog, 1 model bundle. Các bảng `public` cũ được giữ nguyên.
+- Release `github-20261023-v1`: 6.220.361 bytes, SHA-256 `db88f3b2ebee91efdc4129699384b97657911a48379f9cba70aa57a9e0040ff5`; SQL và public health khớp nhau.
+- [CI 39877003357](https://github.com/namhv521/UniMatch/actions/runs/39877003357) thành công: 486 tests passed, 1 skipped; gồm PostgreSQL 16 và Docker Linux.
+- Google/GitHub/Facebook OAuth và Cloudflare Turnstile đang cấu hình, chưa có bằng chứng đăng nhập nhà cung cấp thật. Chưa xác nhận phiên/hồ sơ qua redeploy hoặc luồng so sánh trên production. Vercel chưa chuyển sang backend mới.
+- Đã tạo GitHub OAuth app `3956407` (callback `/api/auth/callback/github`), Google Cloud project UniMatch `fit-visitor-512500-p9`, và Meta app UniMatch `1135265135823111` (miền production, hạng mục Giáo dục). GitHub/Meta yêu cầu chủ tài khoản tự xác minh để lấy secret; Google còn chấp nhận User Data Policy; Cloudflare chờ đăng nhập. Meta còn yêu cầu chính sách riêng tư, hướng dẫn xóa dữ liệu, icon, xác minh doanh nghiệp và xét duyệt trước khi phát hành.
+
+Đưa ứng dụng lên public không phải chứng nhận chất lượng checkpoint: health vẫn ghi `research_models=true`, `production_promoted=false`.
 
 Nguồn: [Render Docker](https://render.com/docs/docker), [Render filesystem/persistent storage](https://render.com/docs/free), [Vercel external rewrites](https://vercel.com/docs/routing/rewrites), [Neon Python connection](https://neon.com/docs/guides/python).
