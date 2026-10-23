@@ -3,6 +3,20 @@ on: [push, pull_request]
 jobs:
   public-contracts:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: unimatch_test
+          POSTGRES_USER: unimatch_test
+          POSTGRES_PASSWORD: disposable_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U unimatch_test -d unimatch_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      UNIMATCH_TEST_DATABASE_URL: postgresql://unimatch_test:disposable_ci_only@localhost:5432/unimatch_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -15,11 +29,16 @@ jobs:
         run: |
           pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements-rebuild-web.txt
+          pip install "psycopg[binary]==3.3.6"
       - run: npm --prefix frontend ci
       - run: npm --prefix frontend run check
       - run: npm --prefix frontend run build
       - run: python -m compileall -q src backend scripts
       - name: Rebuilt contracts and fail-closed clean-source health
         run: python -m pytest tests/rebuild -q
+      - name: Build production CPU image
+        run: docker build --tag unimatch-portal:ci .
+      - name: Verify production image imports
+        run: docker run --rm unimatch-portal:ci python -c "from backend.app.production_release import load_release; from backend.app.portal_database import Database; from src.evaluation.rebuild_benchmark import evaluate_problem; print('Production imports OK')"
   # Private data, full-budget multi-seed experiments and authenticated live
   # integration are verified locally; public CI does not invent those artifacts.

@@ -1,5 +1,9 @@
 # UniMatch local — chạy và kiểm chứng
 
+Giao diện đăng nhập, landing 3D, dashboard và chatbot mới: xem [cấu hình portal](portal_setup.md). Các hướng dẫn nhập token/CSV giảng viên dưới đây chỉ mô tả giao diện lịch sử; portal hiện dùng phiên đăng nhập và bỏ CSV giảng viên.
+
+Bản bổ sung GitHub ngày 23/10/2026 đang dùng launcher riêng, PPO 131.072 và DQN 98.304 bước. Xem [báo cáo, lệnh chạy và rollback](rebuild_github_faculty_quality_report.md). Các lệnh dưới đây giữ lại cho bundle cũ và đối chiếu lịch sử.
+
 ## Chuẩn bị
 
 Thư mục dự án: `C:\Su\KLTNv2\KLTN`. Python environment hiện tại đã có các dependency được pin. Khi tạo environment mới:

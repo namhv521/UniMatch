@@ -24,6 +24,11 @@ def _contains(text, phrase):
     return bool(phrase) and (' '+phrase+' ') in (' '+text+' ')
 
 
+def _topic_query(text):
+    # Retrieval-only alias; never modifies the frozen training taxonomy/encoder.
+    return re.sub(r'\bcv\b', 'computer vision', text, flags=re.I)
+
+
 def _unsafe(text):
     value = _norm(text)
     return bool(re.search(r'ignore.*(?:instruction|system|rules)|bo qua.*(?:huong dan|quy tac|bao mat)|'
@@ -144,6 +149,7 @@ class AdvisorAssistant:
         return {'advisor_id': advisor_id, 'citations': [citation] if citation else [], 'versions': self.versions}
 
     def match_topic_to_advisors(self, topic, advisor_ids=None, top_k=5):
+        topic = _topic_query(topic) if isinstance(topic, str) else topic
         selected = self._selection(advisor_ids, top_k)
         if not isinstance(topic, str) or not topic.strip() or len(topic) > 4000:
             raise ValueError('assistant_question_required_max_4000')
@@ -165,6 +171,7 @@ class AdvisorAssistant:
         """Only aliases of literally matched approved concepts; no hierarchy or inferred tags."""
         if not isinstance(topic, str) or not topic.strip() or len(topic) > 4000:
             raise ValueError('assistant_question_required_max_4000')
+        topic = _topic_query(topic)
         taxonomy = getattr(self.service, 'taxonomy', {'groups': {}})
         aliases, concepts = [], []
         if not _unsafe(topic):
@@ -238,6 +245,11 @@ class AdvisorAssistant:
                     if citations else 'Chưa có bằng chứng trích dẫn hợp lệ trong các trường được phép của hồ sơ này; tôi không suy đoán dữ liệu còn thiếu.')
             return self._response(text,
                                   'advisor_profile', citations=citations)
+        if not (self.expand_query(question)['matched_concepts']
+                or re.search(r'khoa luan|luan van|de tai|giang vien|huong dan|phan bo|thesis|supervisor|ngon ngu|may tinh|natural language|computer vision|machine learning|reinforcement learning|\bnlp\b', normalized)):
+            return self._response('Mình chỉ hỗ trợ tra cứu và hỏi đáp về khóa luận tốt nghiệp, đề tài, giảng viên và phân bổ. Bạn muốn tìm hiểu phần nào?', 'out_of_scope', **self.expand_query(question))
+        if re.search(r'chuan bi|bat dau|quy trinh|cach dung|ho so', normalized) and not self.expand_query(question)['matched_concepts']:
+            return self._response('Bạn có thể bắt đầu bằng tên đề tài, mô tả ngắn và từ khóa; tải hồ sơ sinh viên theo mẫu, chọn giảng viên, rồi so sánh đề xuất. Quy định và thời hạn cụ thể cần hỏi đơn vị quản lý khóa luận.', 'thesis_guidance')
         ranked = self.match_topic_to_advisors(question, selected, top_k)
         answer = ('Các hồ sơ dưới đây được xếp theo compatibility từ matching function cố định, chỉ phản ánh liên hệ chủ đề; không áp dụng quota và không phải xác suất hướng dẫn thành công.'
                   if ranked else 'Chưa có bằng chứng hoặc overlap phù hợp trong các hồ sơ đã chọn. Hãy mô tả đề tài đầy đủ hơn bằng từ ngữ của hồ sơ; tôi không suy đoán dữ liệu còn thiếu.')

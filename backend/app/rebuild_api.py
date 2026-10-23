@@ -23,6 +23,13 @@ ROOT = Path(__file__).resolve().parents[2]
 def create_app(*, service=None, token=None, output=None, selection_manifest=None,
                frontend_dir=None, allow_origins=None):
     app = FastAPI(title='UniMatch local rebuild proposals', docs_url=None, redoc_url=None, openapi_url=None)
+    production = os.environ.get('UNIMATCH_DEPLOYMENT') == 'production'
+    if production:
+        from .portal_database import database_location
+        if not database_location().startswith(('postgres://', 'postgresql://')):
+            raise ValueError('production_postgresql_required')
+        if urlparse(os.environ.get('UNIMATCH_PUBLIC_ORIGIN', '')).scheme != 'https':
+            raise ValueError('production_https_origin_required')
     configured_token = os.environ.get('UNIMATCH_REBUILD_TOKEN', '') if token is None else token
     output = Path(output or ROOT/'data_rebuild/v1')
     selection = selection_manifest or os.environ.get('UNIMATCH_REBUILD_SELECTION')
@@ -36,8 +43,18 @@ def create_app(*, service=None, token=None, output=None, selection_manifest=None
     app.state.rebuild_initialization_lock = threading.Lock()
 
     def authorize(request: Request):
-        if request.client and request.client.host not in {'127.0.0.1', '::1', 'testclient'}:
+        if not production and request.client and request.client.host not in {'127.0.0.1', '::1', 'testclient'}:
             raise HTTPException(403, detail='local_access_only')
+        if request.cookies.get('unimatch_session') and hasattr(app.state, 'portal_authenticated'):
+            if request.method != 'GET' and request.headers.get('sec-fetch-site') == 'cross-site':
+                raise HTTPException(403, detail='origin_not_allowed')
+            origin = request.headers.get('origin')
+            expected_origin = os.environ.get('UNIMATCH_PUBLIC_ORIGIN', '').rstrip('/') if production else str(request.base_url).rstrip('/')
+            if origin and origin != expected_origin and origin not in origins:
+                raise HTTPException(403, detail='origin_not_allowed')
+            return app.state.portal_authenticated(request)['id']
+        if production:
+            raise HTTPException(401, detail='login_required')
         if not isinstance(configured_token, str) or len(configured_token) < 16 or not configured_token.strip():
             raise HTTPException(503, detail='local_auth_not_configured')
         header = request.headers.get('authorization', '')
@@ -153,9 +170,11 @@ def create_app(*, service=None, token=None, output=None, selection_manifest=None
     def run(run_id: str, scope=Depends(authorize), active=Depends(get_service)):
         return active._get('runs', run_id, scope)
 
-    frontend = Path(frontend_dir or ROOT/'frontend')
+    frontend = Path(frontend_dir or (ROOT/'frontend/dist' if (ROOT/'frontend/dist').is_dir() else ROOT/'frontend'))
     if frontend.is_dir():
         app.mount('/', StaticFiles(directory=frontend, html=True), name='existing_frontend')
+    from backend.app.portal import install_portal
+    install_portal(app)
     return app
 
 

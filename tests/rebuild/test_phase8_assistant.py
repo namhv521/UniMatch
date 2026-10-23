@@ -77,6 +77,17 @@ def test_empty_selection_and_bad_topk_are_explicit(assistant):
         assistant.answer('ngôn ngữ', top_k=True)
 
 
+def test_thesis_chat_rejects_unrelated_questions(assistant):
+    result = assistant.answer('Hôm nay thời tiết thế nào?')
+    assert result['intent'] == 'out_of_scope' and not result['citations']
+
+
+def test_cv_short_query_expands_without_changing_training_taxonomy(assistant):
+    assistant.service.taxonomy = load_taxonomy()
+    result = assistant.expand_query('cv')
+    assert any(row['tag'] == 'computer_vision' for row in result['matched_concepts'])
+
+
 def test_explainable_ai_is_topic_data_not_pair_explanation(assistant):
     assert assistant.answer('Giảng viên nào nghiên cứu explainable AI?')['intent'] == 'topic_match'
 

@@ -147,6 +147,10 @@ class RebuildService:
             identity['payload_sha256'] = record_hash(payload)
         key = record_hash(identity)
         body = {'identity': identity, 'payload': payload, 'payload_sha256': record_hash(payload)}
+        if getattr(self, 'record_store', None) is not None:
+            self.record_store.put(kind, key, body)
+            self._get(kind, key, scope)
+            return key
         folder = self.runtime_dir/kind
         if folder.is_symlink():
             raise ValueError('runtime_artifact_invalid')
@@ -163,10 +167,13 @@ class RebuildService:
     def _get(self, kind, key, scope):
         if not isinstance(key, str) or not re.fullmatch('[0-9a-f]{64}', key):
             raise ValueError('cohort_not_found' if kind == 'cohorts' else 'run_not_found')
-        path = self.runtime_dir/kind/(key+'.json')
-        if not path.is_file() or path.is_symlink() or not path.resolve().is_relative_to(self.runtime_dir):
-            raise ValueError('cohort_not_found' if kind == 'cohorts' else 'run_not_found')
-        body = json.loads(path.read_text(encoding='utf-8'))
+        if getattr(self, 'record_store', None) is not None:
+            body = self.record_store.get(kind, key, record_hash(scope))
+        else:
+            path = self.runtime_dir/kind/(key+'.json')
+            if not path.is_file() or path.is_symlink() or not path.resolve().is_relative_to(self.runtime_dir):
+                raise ValueError('cohort_not_found' if kind == 'cohorts' else 'run_not_found')
+            body = json.loads(path.read_text(encoding='utf-8'))
         if (not isinstance(body, dict) or 'payload' not in body or 'identity' not in body
                 or record_hash(body['identity']) != key or record_hash(body['payload']) != body.get('payload_sha256')):
             raise ValueError('runtime_artifact_invalid')

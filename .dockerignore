@@ -3,6 +3,7 @@
 **
 !Dockerfile
 !requirements.txt
+!requirements-production.txt
 !run_dashboard.py
 !src/
 !src/**
@@ -24,6 +25,12 @@
 !frontend/app.js
 !frontend/visualization.js
 !frontend/student-cohorts.js
+!frontend/package-lock.json
+!frontend/*.html
+!frontend/*.css
+!frontend/*.js
+!frontend/assets/
+!frontend/assets/**
 
 **/__pycache__/
 **/*.py[cod]

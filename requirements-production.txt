@@ -1,0 +1,15 @@
+# Inference serving only. Install torch CPU separately as in Dockerfile.
+fastapi==0.135.3
+uvicorn==0.44.0
+httpx==0.28.1
+psycopg[binary]==3.3.6
+numpy==2.3.5
+scipy==1.17.1
+scikit-learn==1.8.0
+gymnasium==0.29.1
+stable-baselines3==2.3.2
+sb3-contrib==2.3.0
+PyYAML==6.0.3
+beautifulsoup4==4.12.3
+pydantic==2.13.5
+requests==2.32.3

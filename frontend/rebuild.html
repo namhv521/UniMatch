@@ -4,63 +4,42 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="Nhập hồ sơ, chọn giảng viên và so sánh phân bổ UniMatch trên dữ liệu local.">
-  <title>UniMatch — Không gian phân bổ local</title>
-  <link rel="stylesheet" href="./style.css">
-  <link rel="stylesheet" href="./rebuild-style.css">
+  <title>Không gian làm việc · UniMatch</title>
+
+  <link rel="stylesheet" href="./portal.css">
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js"}}</script>
 </head>
 <body class="rebuild">
   <a class="skip-link" href="#main">Đi tới nội dung chính</a>
-  <header class="topbar rebuild-topbar">
-    <a class="brand" href="./index.html"><span>Uni</span>Match</a>
-    <nav aria-label="Điều hướng không gian local">
-      <a href="#import">Hồ sơ</a><a href="#advisors">Giảng viên</a><a href="#results">Kết quả</a><a href="#assistant">Tra cứu</a>
-    </nav>
-    <span class="local-label">Workspace local</span>
-  </header>
+  <header class="portal-nav"><a class="brand" href="./landing.html"><span>Uni</span>Match</a><nav aria-label="Điều hướng"><a href="./landing.html">Khám phá</a><a href="./rebuild.html" aria-current="page">Không gian làm việc</a><a href="./dashboard.html">Huấn luyện</a><a href="#assistant">Trợ lý</a></nav><button class="secondary" data-logout>Đăng xuất</button></header>
   <main id="main" class="rebuild-page">
-    <div class="workspace-heading">
-      <div><h1>Phân bổ có giải thích</h1><p>Nhập hồ sơ, chọn giảng viên và xem từng quyết định của mô hình.</p></div>
-      <a class="quiet-link" href="./index.html">Về giao diện hiện tại</a>
-    </div>
-    <section class="connection" aria-labelledby="connection-title">
-      <h2 id="connection-title">Kết nối dữ liệu local</h2>
-      <form id="connect-form" class="connection-form">
-        <label>Địa chỉ API<input id="api-base" type="url" required autocomplete="url" spellcheck="false"></label>
-        <label>Access token<input id="access-token" type="password" required minlength="16" autocomplete="off" spellcheck="false" aria-describedby="token-help"></label>
-        <button id="connect" class="primary" type="submit">Kết nối</button>
-        <button id="disconnect" class="secondary" type="button">Xóa token</button>
-      </form>
-      <p id="token-help" class="help">Token chỉ lưu trong phiên tab này. Hồ sơ và kết quả không lưu vào trình duyệt.</p>
-      <div id="connection-status" role="status" aria-live="polite">Nhập token của dịch vụ local để tải danh mục và phiên bản mô hình.</div>
-    </section>
+    <div class="workspace-heading"><div><h1>Cùng tìm một kết nối phù hợp.</h1><p>Chuẩn bị hồ sơ, chọn giảng viên và khám phá từng đề xuất.</p></div><span id="user-greeting"></span></div>
     <div id="message" role="status" aria-live="polite" tabindex="-1" hidden></div>
     <div class="workspace-grid">
       <div class="input-column">
         <section id="import" class="work-section" aria-labelledby="import-title">
-          <header class="section-heading"><div><h2 id="import-title">Hồ sơ sinh viên</h2><p>Dùng CSV theo mẫu; trường chưa biết để trống.</p></div><button id="template" class="secondary" type="button" disabled>Tải CSV mẫu</button></header>
+          <header class="section-heading"><div><h2 id="import-title">Hồ sơ sinh viên</h2><p>Tải danh sách sinh viên để bắt đầu.</p></div><button id="template" class="secondary" type="button" disabled>Tải CSV mẫu</button></header>
           <form id="import-form">
             <label class="file-label" for="csv-file">Chọn file CSV sinh viên<input id="csv-file" type="file" accept=".csv,text/csv" disabled required></label>
             <div class="import-actions"><span id="file-info" class="help">Chưa chọn file.</span><button id="validate" class="primary" type="submit" disabled>Kiểm tra hồ sơ</button></div>
           </form>
-          <details class="field-guide"><summary>Điền những trường nào?</summary><p>Tối thiểu cần <code>student_id</code> và <code>thesis_title</code>. Tên, abstract, từ khóa, công nghệ và nguyện vọng chỉ điền khi có dữ liệu thật. Không tự điền trình độ hay confidence.</p><p id="template-fields" class="help">Danh sách cột đầy đủ sẽ tải từ dịch vụ sau khi kết nối.</p></details>
           <div id="import-result" class="empty-state">Sau khi kiểm tra, lỗi từng dòng và danh sách hồ sơ hợp lệ sẽ xuất hiện ở đây.</div>
         </section>
         <section id="advisors" class="work-section" aria-labelledby="advisors-title">
-          <header class="section-heading"><div><h2 id="advisors-title">Giảng viên tham gia</h2><p>Quota chia đều theo số sinh viên và danh sách đã chọn.</p></div><span id="selection-count" class="count-label">0 đã chọn</span></header>
-          <details class="field-guide"><summary>Kiểm tra CSV giảng viên</summary><p class="help">Giữ đủ cột mẫu; điền mã, tên và URL nguồn thật. Kiểm tra đúng mẫu và khả năng dùng với mô hình hiện tại. Thay đổi danh mục hoặc đặc trưng cần rebuild và kiểm chứng trước khi kích hoạt.</p><button id="advisor-template" class="secondary" type="button" disabled>Tải CSV mẫu giảng viên</button><form id="advisor-import-form"><label for="advisor-csv-file">File CSV giảng viên (UTF-8)</label><input id="advisor-csv-file" type="file" accept=".csv,text/csv" disabled><button id="advisor-validate" class="secondary" type="submit" disabled>Kiểm tra CSV giảng viên</button></form><div id="advisor-import-result" class="empty-state" aria-live="polite">Chưa kiểm tra file. Danh mục lựa chọn bên dưới giữ theo phiên bản đã kiểm chứng.</div></details>
+          <header class="section-heading"><div><h2 id="advisors-title">Giảng viên tham gia</h2><p>Chọn từ danh mục giảng viên của học kỳ.</p></div><span id="selection-count" class="count-label">0 đã chọn</span></header>
           <div class="advisor-tools"><label class="search-label">Tìm giảng viên<input id="advisor-search" type="search" placeholder="Tên hoặc mã giảng viên" disabled></label><button id="select-all" class="secondary" type="button" disabled>Chọn tất cả có tín hiệu</button><button id="clear-selection" class="secondary" type="button" disabled>Bỏ chọn</button></div>
           <fieldset id="advisor-list" disabled><legend class="sr-only">Chọn giảng viên tham gia</legend><p class="empty-state">Kết nối dịch vụ để tải danh mục đã được kiểm chứng.</p></fieldset>
           <div id="quota-preview" class="quota-preview" aria-live="polite">Nhập hồ sơ và chọn giảng viên để xem quota.</div>
           <label class="confirmation"><input id="confirm-policy" type="checkbox" disabled><span>Tôi xác nhận danh sách tham gia và quota chia đều để chạy phân bổ.</span></label>
           <div class="main-actions"><button id="recommend" class="secondary" type="button" disabled>Xem top-K phù hợp</button><button id="compare" class="primary" type="button" disabled>So sánh PPO · DQN · Hungarian</button></div>
-          <p class="help">Top-K là mức phù hợp riêng từng hồ sơ. Phân bổ còn phải thỏa quota toàn cohort.</p>
+
         </section>
       </div>
       <aside class="context-panel" aria-labelledby="context-title">
         <h2 id="context-title">Mô hình &amp; nguồn</h2>
         <div id="model-status" class="empty-state">Chưa kết nối.</div>
-        <details><summary>Phiên bản và bằng chứng</summary><pre id="version-detail">Chưa có metadata.</pre></details>
-        <p class="help">Điểm phù hợp không phải xác suất thành công hay trình độ cá nhân. Trường thiếu được giữ là chưa biết.</p>
+
+<p class="help">PPO và DQN do UniMatch huấn luyện là hai mô hình chính. Hungarian là phương pháp đối chiếu.</p><p id="model-source" class="help"></p><a href="./dashboard.html">Xem quá trình huấn luyện</a>
       </aside>
     </div>
     <section id="results" class="work-section result-section" aria-labelledby="results-title">
@@ -69,7 +48,7 @@
       <div id="allocation-panel" hidden>
         <label class="algorithm-picker">Xem phân bổ của<select id="result-algorithm"></select></label>
         <div id="assignments-table" class="table-scroll"></div>
-        <details><summary>Policy và phiên bản của lần chạy</summary><pre id="run-metadata"></pre></details>
+
       </div>
     </section>
     <section id="rankings" class="work-section" aria-labelledby="rankings-title">
@@ -77,17 +56,18 @@
       <div id="recommendation-result" class="empty-state">Chọn “Xem top-K phù hợp” sau khi kiểm tra hồ sơ.</div>
     </section>
     <section id="simulation" class="work-section" aria-labelledby="simulation-title">
-      <header class="section-heading"><div><h2 id="simulation-title">Mô phỏng từng quyết định</h2><p>Phát lại trace thực của thuật toán đã chọn.</p></div><output id="step-count">0 / 0 bước</output></header>
+      <header class="section-heading"><div><h2 id="simulation-title">Mô phỏng từng quyết định</h2><p>Mỗi nhân vật sinh viên đến gặp giảng viên được mô hình đề xuất.</p></div><output id="step-count">0 / 0 bước</output></header>
       <div class="replay-controls"><button id="previous-step" type="button" class="secondary" disabled>Bước trước</button><button id="play" type="button" class="primary" disabled>Phát</button><button id="next-step" type="button" class="secondary" disabled>Bước tiếp</button><label>Tốc độ<select id="replay-speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label><button id="reset-replay" type="button" class="secondary" disabled>Về đầu</button></div>
+      <div class="simulation-stage"><canvas id="allocation-scene" aria-label="Mô phỏng phân bổ sinh viên đến giảng viên"></canvas><p id="scene-explanation">Chạy so sánh rồi nhấn Phát. Nhân vật đội mũ là sinh viên; người cầm sách là giảng viên.</p><button id="replay-motion" class="scene-toggle" type="button">Tạm dừng chuyển động 3D</button></div>
       <div id="current-decision" class="empty-state" aria-live="polite">Trace sẽ xuất hiện sau lần phân bổ đầu tiên.</div>
       <div id="load-chart" class="load-chart"></div>
       <div id="trace-table" class="table-scroll"></div>
     </section>
     <section id="assistant" class="work-section" aria-labelledby="assistant-title">
-      <header class="section-heading"><div><h2 id="assistant-title">Tra cứu có nguồn</h2><p>Đọc dữ liệu đã duyệt và đối chiếu mức phù hợp; không tự quyết định phân công.</p></div></header>
-      <p id="assistant-status" class="help">Tra cứu chưa bật trong phiên bản này.</p>
-      <form id="assistant-form"><label for="assistant-question">Câu hỏi hoặc chủ đề nghiên cứu</label><div class="question-row"><input id="assistant-question" maxlength="2000" placeholder="Ví dụ: Chủ đề xử lý ngôn ngữ tự nhiên phù hợp với ai?" disabled required><button id="ask" class="primary" type="submit" disabled>Tra cứu</button></div></form>
-      <div id="assistant-result" class="empty-state">Tra cứu chưa bật trong phiên bản này.</div>
+      <header class="section-heading"><div><h2 id="assistant-title">Bạn hỏi, UniMatch tìm nguồn.</h2><p>Trợ lý về đề tài, giảng viên và phân bổ khóa luận tốt nghiệp.</p></div></header>
+      <p id="assistant-status" class="help">Tra cứu toàn bộ danh mục giảng viên đã duyệt.</p><div class="chat-suggestions"><button class="secondary" type="button" data-question="Giảng viên nào có nguồn về NLP?">Tìm giảng viên về NLP</button><button class="secondary" type="button" data-question="Giảng viên nào có nguồn về computer vision?">Tìm giảng viên về CV</button><button class="secondary" type="button" data-question="Nguyễn Hùng Việt nghiên cứu gì?">Hỏi về Nguyễn Hùng Việt</button></div><div id="chat-history" class="chat-history" role="log" aria-label="Hội thoại trợ lý" aria-live="polite"><article class="chat-bubble"><h3>UniMatch</h3><p>Chào bạn! Mình giúp tra cứu giảng viên và chủ đề khóa luận từ nguồn đã duyệt. Bạn đang quan tâm đề tài nào?</p></article></div>
+      <form id="assistant-form"><label for="assistant-question">Câu hỏi hoặc chủ đề nghiên cứu</label><div class="question-row"><input id="assistant-question" maxlength="2000" placeholder="Ví dụ: Chủ đề xử lý ngôn ngữ tự nhiên phù hợp với ai?" disabled required><button id="ask" class="primary" type="submit" disabled>Gửi câu hỏi</button></div></form>
+
     </section>
     <footer class="workspace-footer">UniMatch · Dữ liệu và mô hình local · Đề xuất cần được người phụ trách xem xét trước khi xác nhận phân công.</footer>
   </main>

@@ -61,7 +61,8 @@ if __name__=='__main__':
         os.environ['UNIMATCH_REBUILD_SELECTION']=str(selection.resolve())
     os.environ.setdefault('OMP_NUM_THREADS','1')
     os.environ.setdefault('MKL_NUM_THREADS','1')
-    print(f'Local workspace: http://127.0.0.1:{args.port}/rebuild.html',flush=True)
+    os.environ.setdefault('UNIMATCH_PUBLIC_ORIGIN',f'http://127.0.0.1:{args.port}')
+    print(f'Local workspace: http://127.0.0.1:{args.port}/login.html',flush=True)
     print(f'Access token file: {args.token_file.resolve()} (private; value not logged)',flush=True)
     import uvicorn
     uvicorn.run(local_app_entrypoint(ROOT/'data_rebuild/v1'),host='127.0.0.1',port=args.port,access_log=False)
