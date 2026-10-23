@@ -28,7 +28,7 @@ jobs:
       - name: Install rebuilt local API and CPU model runtime
         run: |
           pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements-rebuild-web.txt
+          pip install -r requirements-github-rebuild.txt
           pip install "psycopg[binary]==3.3.6"
       - run: npm --prefix frontend ci
       - run: npm --prefix frontend run check
