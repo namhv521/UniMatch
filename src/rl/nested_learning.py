@@ -9,7 +9,9 @@ import copy
 import hashlib
 import json
 import math
+import random
 import shutil
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -101,6 +103,9 @@ def _parent(directory):
     if directory is None:
         return None
     directory = Path(directory).resolve()
+    if directory.is_file():
+        from src.rl.model_retention import resolve_retention
+        return resolve_retention(directory)
     report = verify_round(directory)
     if report['decision'] != 'accepted':
         raise ValueError('accepted_parent_required')
@@ -345,7 +350,7 @@ def _checkpoint_digest(directory):
 
 
 def _load_parent(previous):
-    data = previous['input']
+    data = previous.get('weight_input', previous['input'])
     env = MatchingEnv([decode_problem(p) for p in data['train']], reward_weights=data['contract']['reward_weights'])
     checkpoint = previous['path'] / 'checkpoint'
     if data['round']['algorithm'] == 'ppo':
@@ -370,11 +375,11 @@ def _safe(result):
 
 
 def run_round(train_problems, validation_problem, contract, round_spec, output, *, parent=None,
-              total_timesteps=256, model_config=None, historical_validation=None):
+              total_timesteps=256, model_config=None, historical_validation=None, eval_interval=None):
     source_root = Path(__file__).resolve().parents[2]
     code_sha256 = {name: _digest(source_root / name) for name in (
         'src/rl/nested_learning.py', 'src/rl/rebuild_ppo.py',
-        'src/rl/rebuild_dqn.py', 'src/environment/rebuild_env.py')}
+        'src/rl/rebuild_dqn.py', 'src/environment/rebuild_env.py', 'src/rl/model_retention.py')}
     output = Path(output).resolve()
     if output.exists():
         raise FileExistsError('new_round_output_required')
@@ -382,8 +387,16 @@ def run_round(train_problems, validation_problem, contract, round_spec, output, 
         raise ValueError('round_output_must_not_modify_parent')
     if type(total_timesteps) is not int or total_timesteps < 1:
         raise ValueError('positive_timestep_budget_required')
+    if eval_interval is not None and (type(eval_interval) is not int or eval_interval < 1):
+        raise ValueError('positive_eval_interval_required')
     validation = validate_round(train_problems, validation_problem, contract, round_spec, parent=parent)
     previous = _parent(parent)
+    if previous:
+        protected = [previous['path']]
+        if previous.get('retention'):
+            protected.append(Path(previous['retention']['logical_context']['path']))
+        if any(output.is_relative_to(path) for path in protected):
+            raise ValueError('round_output_must_not_modify_parent')
     algorithm, seed = round_spec['algorithm'], round_spec['seed']
     torch.set_num_threads(1)
     torch.use_deterministic_algorithms(True)
@@ -406,12 +419,13 @@ def run_round(train_problems, validation_problem, contract, round_spec, output, 
         replay_policy = 'fresh_on_policy_rollouts'
     elif previous:
         model = old_model
-        same_semantics = _replay_semantics(previous['input']['contract'], previous['input']['round']) == _replay_semantics(contract, round_spec)
-        old_ids = set(previous['input']['memberships']['train'])
+        weight_input = previous.get('weight_input', previous['input'])
+        same_semantics = _replay_semantics(weight_input['contract'], weight_input['round']) == _replay_semantics(contract, round_spec)
+        old_ids = set(weight_input['memberships']['train'])
         if old_ids & set(validation['memberships']['train']):
             # Revisions to the same cohort may alter rewards or stored masks even
             # if a caller forgets to bump a semantic version.
-            same_semantics &= record_hash(previous['input']['train']) == record_hash([problem_payload(p) for p in train_problems])
+            same_semantics &= record_hash(weight_input['train']) == record_hash([problem_payload(p) for p in train_problems])
         if same_semantics:
             retained = sorted({sid for cohort in model.training_provenance for sid in cohort['student_ids']})
             replay_policy = 'retain_compatible_bounded_replay'
@@ -453,11 +467,67 @@ def run_round(train_problems, validation_problem, contract, round_spec, output, 
             'validation': problem_payload(validation_problem),
             'historical_validation': {name: problem_payload(p) for name, p in historical_validation.items()},
             'requested_timesteps': total_timesteps, 'model_config': config,
+            'eval_interval': eval_interval,
+            'parent_retention': previous.get('retention') if previous else None,
             'scope': validation['scope'], 'prediction_time_verified': validation['prediction_time_verified']})
-    training = (model.learn(total_timesteps) if algorithm == 'ppo' else
+    curve_rows = []
+    training_started = time.perf_counter()
+    def capture_curve(progress, phase='interval'):
+        step = int(progress['timesteps'])
+        if eval_interval is None or (phase == 'interval' and (step-before_steps) % eval_interval):
+            return
+        # Evaluation uses independent environments and cannot change training
+        # RNG streams or the policy train/eval mode during an active rollout.
+        numpy_state, torch_state, python_state = np.random.get_state(), torch.get_rng_state(), random.getstate()
+        networks = [model.model.policy] if algorithm == 'ppo' else [model.online, model.target]
+        modes = [network.training for network in networks]
+        try:
+            result = evaluate_problem(validation_problem, algorithm, model=model, seed=seed)
+            history = {name: evaluate_problem(p, algorithm, model=model, seed=seed)
+                       for name, p in historical_validation.items()}
+        finally:
+            np.random.set_state(numpy_state); torch.set_rng_state(torch_state); random.setstate(python_state)
+            for network, mode in zip(networks, modes):
+                network.train(mode)
+        elapsed = time.perf_counter() - training_started
+        score = result['metrics']['objective'] / len(validation_problem.student_ids)
+        baseline_scores = {name: value['metrics']['objective'] / len(validation_problem.student_ids)
+                           for name, value in baselines.items()}
+        row = {'relative_step': step-before_steps, 'cumulative_step': step, 'phase': phase,
+               'elapsed_seconds': elapsed, 'steps_per_second': (step-before_steps) / max(elapsed, 1e-9),
+               'validation_objective_per_student': score,
+               'validation_mean_compatibility': result['metrics']['mean_compatibility'],
+               'validation_coverage': result['metrics']['coverage'],
+               'validation_constraint_violations': result['metrics']['constraint_violations'],
+               'validation_invalid_action_count': result['invalid_action_count'],
+               'parent_objective_per_student': parent_result['metrics']['objective'] / len(validation_problem.student_ids) if parent_result else None,
+               **{name+'_objective_per_student': value for name, value in baseline_scores.items()},
+               'hungarian_regret_per_student': baseline_scores['hungarian']-score,
+               'train_loss': progress.get('loss'), 'train_mean_episode_reward': progress.get('mean_episode_reward'),
+               'episodes': progress.get('episodes', 0), 'epsilon': progress.get('epsilon'),
+               'historical_validation': {name: {
+                    'objective_per_student': value['metrics']['objective'] / len(historical_validation[name].student_ids),
+                    'mean_compatibility': value['metrics']['mean_compatibility'],
+                    'coverage': value['metrics']['coverage'], 'constraint_violations': value['metrics']['constraint_violations'],
+                    'drop_from_parent': (before_history[name]['metrics']['objective']-value['metrics']['objective']) / len(historical_validation[name].student_ids)}
+                    for name, value in history.items()}}
+        if curve_rows and curve_rows[-1]['cumulative_step'] == step:
+            curve_rows[-1] = row
+        else:
+            curve_rows.append(row)
+        (output / 'learning_curve.jsonl').write_text(''.join(json.dumps(r, ensure_ascii=False, allow_nan=False)+'\n' for r in curve_rows), encoding='utf-8')
+    capture_curve({'timesteps':before_steps}, 'initial')
+    progress_callback = capture_curve if eval_interval is not None else None
+    training = (model.learn(total_timesteps, progress_callback=progress_callback) if algorithm == 'ppo' else
                 model.learn(env, total_timesteps, epsilon_start=round_spec.get('epsilon_start', .2),
-                            epsilon_end=round_spec.get('epsilon_end', .05)))
+                            epsilon_end=round_spec.get('epsilon_end', .05), progress_callback=progress_callback))
     after_steps = int(model.model.num_timesteps if algorithm == 'ppo' else model.total_timesteps)
+    episode_rewards = training.get('episode_rewards', [])
+    last_loss = training['losses'][-1] if training.get('losses') else None
+    capture_curve({'timesteps':after_steps, 'episodes':training['episodes'],
+                   'loss':last_loss.get('loss') if isinstance(last_loss, dict) else last_loss,
+                   'mean_episode_reward':float(np.mean([r['reward'] for r in episode_rewards[-100:]])) if episode_rewards else None,
+                   'epsilon':training.get('epsilon_end')}, 'final')
     candidate = evaluate_problem(validation_problem, algorithm, model=model, seed=seed)
     after_history = {name: evaluate_problem(p, algorithm, model=model, seed=seed)
                      for name, p in historical_validation.items()}
@@ -501,6 +571,8 @@ def run_round(train_problems, validation_problem, contract, round_spec, output, 
               'scope': validation['scope'], 'prediction_time_verified': validation['prediction_time_verified'],
               'availability_assumption': validation['availability_assumption'], 'cross_semester': validation['cross_semester'],
               'parent_round_id': previous['report']['round_id'] if previous else None,
+              'logical_parent_round_id': previous['input']['round']['round_id'] if previous else None,
+              'parent_retention': previous.get('retention') if previous else None,
               'parent_checkpoint_sha256': previous['report']['checkpoint_sha256'] if previous else None,
               'checkpoint_sha256': _checkpoint_digest(output / 'checkpoint'),
               'start_weights_equal_parent': starts_equal, 'weights_changed': _weights(model, algorithm) != start_signature,
@@ -508,6 +580,9 @@ def run_round(train_problems, validation_problem, contract, round_spec, output, 
               'replay_policy': replay_policy, 'retained_historical_training_student_ids': retained,
               'lineage_training_student_ids': sorted(learned_ids),
               'training': training, 'parent': parent_result, 'candidate': candidate, 'baselines': baselines,
+              'training_elapsed_seconds': time.perf_counter()-training_started,
+              'learning_curve': {'path':'learning_curve.jsonl', 'points':len(curve_rows), 'eval_interval':eval_interval,
+                                 'selection_policy':'final_checkpoint_only', 'uses_final_test':False} if eval_interval is not None else None,
               'primary_metric': 'objective_per_student', 'candidate_score': candidate_score, 'parent_score': parent_score,
               'delta': delta, 'improvement_demonstrated': delta is not None and delta > thresholds['min_improvement'] and round_spec.get('control') != 'extra_steps_no_new_signal',
               'improvement_attribution': 'optimization_only_control' if round_spec.get('control') == 'extra_steps_no_new_signal' else 'causality_not_established',
@@ -523,7 +598,8 @@ def run_round(train_problems, validation_problem, contract, round_spec, output, 
     _write(output / 'report.json', report)
     _write(output / 'decision.json', {'round_id': round_spec['round_id'], 'decision': decision,
             'accepted_checkpoint': 'checkpoint' if decision == 'accepted' else None,
-            'retained_parent': str(Path(parent).resolve()) if parent and decision != 'accepted' else None,
+            'retained_parent': str(previous['path']) if previous and decision != 'accepted' else None,
+            'logical_parent_context': str(Path(parent).resolve()) if previous and previous.get('retention') else None,
             'production_promoted': False})
     _write(output / 'manifest.json', {'schema_version': SCHEMA, 'created_at': datetime.now(timezone.utc).isoformat(),
             'code_sha256': code_sha256,

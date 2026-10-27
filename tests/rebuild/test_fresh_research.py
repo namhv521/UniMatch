@@ -44,3 +44,32 @@ def test_missing_bootstrap_encoder_blocks_dependent_suites(tmp_path, monkeypatch
     result = m.run_research(root, root / 'research', mode='retrospective_document_proxy', algorithms=['ppo'])
     assert calls == ['V1']
     assert result['suites']['V2']['status'] == 'blocked_bootstrap_unavailable'
+
+
+def test_equal_budget_controls_do_not_restart_rejected_lineage(tmp_path, monkeypatch):
+    m = importlib.import_module('scripts.run_fresh_research')
+    root = tmp_path / 'data_rebuild/nested_rl_20261028/run'
+    root.mkdir(parents=True)
+    calls = []
+    def prepare(root, out, *, version, **kwargs):
+        out.mkdir(parents=True)
+        (out / 'encoder.json').write_text('{}')
+        if version == 'V4':
+            return {'status': 'blocked_data_insufficient'}
+        (out / 'suite.json').write_text(json.dumps({'train': [], 'validation': {'version': version},
+            'contract': {}, 'round': {'round_id': version, 'decision_thresholds': {'min_improvement': 0}}}))
+        return {'status': 'ready_research_only'}
+    def fit(train, validation, contract, spec, folder, **kwargs):
+        calls.append((validation['version'], spec, kwargs))
+        return {'decision': 'accepted' if validation['version'] == 'V1' else 'rejected'}
+    monkeypatch.setattr(m, 'prepare_suite', prepare)
+    monkeypatch.setattr(m, 'decode_problem', lambda p: p)
+    monkeypatch.setattr(m, 'run_round', fit)
+    report = m.run_research(root, root / 'research', mode=m.MODE, algorithms=['ppo'], timesteps=131072,
+        eval_interval=8192, accept_non_regression=True, from_scratch_controls=True)
+    assert [(v, s.get('control')) for v, s, _ in calls] == [
+        ('V1', None), ('V2', None), ('V2', 'from_scratch'), ('V3', 'from_scratch')]
+    assert all(k['total_timesteps'] == 131072 and k['eval_interval'] == 8192 for _, _, k in calls)
+    assert all(s['decision_thresholds']['accept_non_regression'] for _, s, _ in calls)
+    assert all(k['parent'] is None for _, s, k in calls if s.get('control') == 'from_scratch')
+    assert report['rounds']['ppo']['V3']['status'] == 'blocked_parent_not_accepted'
