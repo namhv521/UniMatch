@@ -1,6 +1,6 @@
 # UniMatch — Data Dictionary & Feature Selection (v1.0)
 
-**Điều chỉnh ngày 27/10/2026:** CSV import v1.0 cũ không đổi. Hiện chỉ tạo `data_rebuild/advisor_urls/giang_vien_urls.csv` gồm Tên giảng viên, FIT NEU, Google Scholar, GitHub, ResearchGate; URL thiếu để trống. Chưa thu thập, trích xuất hoặc clean dữ liệu. Quy ước phiên bản V1–V4 và RL hai cấp tại [đặc tả hiện hành](rl_hai_cap_va_corpus_giang_vien_20261027.md).
+**Ủy quyền hiện hành — 28/10/2026 (ưu tiên cao nhất):** triển khai RL trong kỳ kết hợp kế thừa checkpoint qua kỳ theo [đặc tả hiện hành](rl_hai_cap_va_corpus_giang_vien_20261027.md). Thu thập/trích xuất lại nguồn vào `data_rebuild/nested_rl_20261028/<run>/`, không ghi đè raw/gold/checkpoint cũ; CSV URL chỉ là seed. Hạn chế URL-only ngày 27/10 đã được thay thế. Học kỳ học vụ lấy ngày có bằng chứng trên trang 1–2: tháng 9–12 năm Y → Y.1, tháng 1–5 → (Y−1).2, tháng 6–8 → (Y−1).3. Phiên bản training riêng: V1/2024.1 gồm lịch sử đến 12/2024; V2/2024.2 là 01–05/2025; V3/2025.1 là 06–12/2025, gồm hè học vụ 2024.3; V4/2025.2 là 01–05/2026. Hè 2025.3 và kỳ 2026.1 chưa ánh xạ phiên bản training; không tự tạo V5. Ngày thiếu/mâu thuẫn giữ unresolved, không suy từ ngày hiện tại. Cutoff snapshot faculty/model đã chốt vẫn giữ 30/06/2025 và 30/06/2026, khác cửa sổ sự kiện sinh viên; tháng 6/2025 thuộc V3, không thuộc V2 sinh viên. Availability được quản lý riêng; vòng thiếu tín hiệu thật phải skipped, không tạo feedback giả.
 
 **Áp dụng cho** `students_import.csv` và `advisors_import.csv`. Hai CSV chỉ có header; không có dữ liệu cá nhân được tạo giả. File nhập UTF-8 BOM để tương thích Excel; dùng dấu phẩy CSV chuẩn, `;` ngăn nhiều taxonomy tag, JSON string cho proficiency (theo CSV quoting).
 
@@ -70,9 +70,11 @@
 
 ## 6. Thiết kế tương thích lâu dài
 
-- **Danh bạ URL hiện tại:** một CSV năm cột, 38 giảng viên nguồn. Không thêm dữ liệu profile, event year hoặc feedback vào danh bạ. URL không là feature số; ô trống nghĩa là chưa có URL xác minh.
-- **Phiên bản dữ liệu tương lai:** V1/2024.1 đến hết 31/12/2024; V2/2024.2 từ 01/01–30/06/2025; V3/2025.1 từ 01/07–31/12/2025; V4/2025.2 từ 01/01–30/06/2026. Cửa sổ mới không trùng; snapshot/model kế thừa lịch sử được ghi riêng.
-- **Vòng phản hồi tương lai:** cần semester/round/parent/signal/cutoff, nguồn xác nhận và phiên bản reward/constraint. Chưa tạo metadata hoặc dữ liệu giả ở giai đoạn lưu URL.
+- **Danh bạ URL làm seed:** một CSV năm cột, 38 giảng viên nguồn. Không thêm dữ liệu profile, event year hoặc feedback vào danh bạ. URL không là feature số; ô trống nghĩa là chưa có URL xác minh.
+- **`academic_cohort` / học kỳ học vụ:** xác định từ ngày nguồn trang 1–2 theo tháng 9–12 → Y.1, 1–5 → (Y−1).2, 6–8 → (Y−1).3; giữ bằng chứng, trang và trạng thái thiếu/mâu thuẫn. Không dùng năm đơn lẻ để suy kỳ.
+- **`training_version` / phiên bản dữ liệu:** ánh xạ riêng V1–V4. Hè học vụ `2024.3` (06–08/2025) thuộc training `2025.1`/V3. Các học kỳ lịch sử không bị đổi mã thành `2024.1`; năm ≤2024 thiếu tháng chỉ đủ nhóm V1, cohort vẫn chưa xác định. Hè `2025.3` và kỳ `2026.1` chưa được cấp phiên bản mới.
+- **Snapshot faculty/model đã chốt:** V1/2024.1 đến 31/12/2024; V2/2024.2 đến 30/06/2025; V3/2025.1 đến 31/12/2025; V4/2025.2 đến 30/06/2026. Đây là cutoff tích lũy, khác cửa sổ sự kiện sinh viên: V2 là 01–05/2025, V3 là 06–12/2025, V4 là 01–05/2026. Không đưa sinh viên tháng 6/2025 vào V2 chỉ vì cutoff faculty là 30/06.
+- **Vòng phản hồi:** cần semester/round/parent/signal/cutoff, nguồn xác nhận và phiên bản reward/constraint. Triển khai metadata thật trong namespace mới; thiếu signal báo unavailable/skipped, không tạo dữ liệu giả.
 
 - Không đổi nghĩa cột giữa các kỳ; thay đổi taxonomy yêu cầu version + migration/alias backward mapping.
 - Schema từ điển phải tạo ra JSON Schema/Pydantic và test import, không duy trì validator khác logic CSV.

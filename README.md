@@ -1,6 +1,8 @@
 # UniMatch
 
-**Hướng nghiên cứu — 27/10/2026:** RL có các vòng phản hồi trong kỳ và kế thừa qua kỳ. Bước hiện tại **chỉ lưu một [CSV URL giảng viên](data_rebuild/advisor_urls/giang_vien_urls.csv)**, chưa thu thập/clean dữ liệu. Các phiên bản: V1=2024.1 đến 31/12/2024; V2=2024.2 đến 30/06/2025; V3=2025.1 đến 31/12/2025; V4=2025.2 đến 30/06/2026. Xem [đặc tả hiện hành](docs/rl_hai_cap_va_corpus_giang_vien_20261027.md). Runtime/model hiện tại giữ nguyên.
+Pipeline nguồn mới và RL hai cấp: [hướng dẫn chạy, kết quả và dữ liệu còn thiếu](docs/nested_rl_rebuild_20261028.md).
+
+**Ủy quyền hiện hành — 28/10/2026 (ưu tiên cao nhất):** triển khai RL trong kỳ kết hợp kế thừa checkpoint qua kỳ theo [đặc tả hiện hành](docs/rl_hai_cap_va_corpus_giang_vien_20261027.md). Thu thập/trích xuất lại nguồn vào `data_rebuild/nested_rl_20261028/<run>/`, không ghi đè raw/gold/checkpoint cũ; CSV URL chỉ là seed. Hạn chế URL-only ngày 27/10 đã được thay thế. Học kỳ học vụ lấy ngày có bằng chứng trên trang 1–2: tháng 9–12 năm Y → Y.1, tháng 1–5 → (Y−1).2, tháng 6–8 → (Y−1).3. Phiên bản training riêng: V1/2024.1 gồm lịch sử đến 12/2024; V2/2024.2 là 01–05/2025; V3/2025.1 là 06–12/2025, gồm hè học vụ 2024.3; V4/2025.2 là 01–05/2026. Hè 2025.3 và kỳ 2026.1 chưa ánh xạ phiên bản training; không tự tạo V5. Ngày thiếu/mâu thuẫn giữ unresolved, không suy từ ngày hiện tại. Cutoff snapshot faculty/model đã chốt vẫn giữ 30/06/2025 và 30/06/2026, khác cửa sổ sự kiện sinh viên; tháng 6/2025 thuộc V3, không thuộc V2 sinh viên. Availability được quản lý riêng; vòng thiếu tín hiệu thật phải skipped, không tạo feedback giả.
 
 > Nền tảng web hỗ trợ lập hồ sơ sinh viên, khám phá giảng viên hướng dẫn từ nguồn đã duyệt và so sánh các đề xuất phân công khóa luận có ràng buộc quota.
 
