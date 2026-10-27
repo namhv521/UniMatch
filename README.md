@@ -1,5 +1,7 @@
 # UniMatch
 
+**Hướng nghiên cứu — 27/10/2026:** RL có các vòng phản hồi trong kỳ và kế thừa qua kỳ. Bước hiện tại **chỉ lưu một [CSV URL giảng viên](data_rebuild/advisor_urls/giang_vien_urls.csv)**, chưa thu thập/clean dữ liệu. Các phiên bản: V1=2024.1 đến 31/12/2024; V2=2024.2 đến 30/06/2025; V3=2025.1 đến 31/12/2025; V4=2025.2 đến 30/06/2026. Xem [đặc tả hiện hành](docs/rl_hai_cap_va_corpus_giang_vien_20261027.md). Runtime/model hiện tại giữ nguyên.
+
 > Nền tảng web hỗ trợ lập hồ sơ sinh viên, khám phá giảng viên hướng dẫn từ nguồn đã duyệt và so sánh các đề xuất phân công khóa luận có ràng buộc quota.
 
 UniMatch được xây dựng cho bối cảnh đồ án/khóa luận đại học. Hệ thống kết hợp xử lý dữ liệu có kiểm chứng, tối ưu phân công có ràng buộc, các mô hình học tăng cường và giao diện trực quan để hỗ trợ điều phối viên cùng sinh viên xem xét phương án ghép nối phù hợp.

@@ -1,5 +1,7 @@
 # Nghiên cứu hai hướng phát triển UniMatch: học tiếp tục theo năm và học từ kết quả hướng dẫn thực tế
 
+**Quyết định mới ngày 27/10/2026:** chọn [RL nhiều vòng phản hồi trong kỳ, kế thừa qua kỳ](rl_hai_cap_va_corpus_giang_vien_20261027.md); inverse RL không nằm trong phạm vi triển khai hiện tại. Nội dung dưới đây giữ vai trò nghiên cứu so sánh, không phải chỉ đạo triển khai IRL.
+
 Ngày nghiên cứu: **27/10/2026**.
 
 Phạm vi: nghiên cứu tài liệu học thuật, đối chiếu một số đường huấn luyện và bảng dữ liệu hiện tại, đề xuất thiết kế nghiên cứu. Không sửa thuật toán, không huấn luyện, không cập nhật dữ liệu hay triển khai hệ thống. Các công thức và thí nghiệm bên dưới là đề xuất, chưa phải kết quả thực nghiệm.
@@ -16,6 +18,8 @@ Khuyến nghị cho khóa luận: lấy phương pháp 1 làm khung cập nhật
 Điều cần chỉnh về thuật ngữ: **train từ đầu vẫn có thể là RL; kế thừa model cũng có thể xuất hiện trong học có giám sát**. RL được xác định bởi trạng thái, hành động, chuyển trạng thái và mục tiêu tối đa hóa phần thưởng. Yêu cầu kế thừa qua các vòng của đề bài là yêu cầu bổ sung về học tiếp tục. Tổng quan của Khetarpal và cộng sự đặt continual RL trong bối cảnh môi trường không dừng và duy trì khả năng học qua thời gian. [Nguồn tổng quan continual RL](https://arxiv.org/abs/2012.13490).
 
 ## 2. Đối chiếu với hệ thống và dữ liệu hiện có
+
+**Bổ sung sau khi rà soát đường Phase 6:** repository đã có `continue_ppo`, `ContinualDQN`, snapshot, offline queue và registry rollback phục vụ diễn tập cập nhật. Những nhận định về khởi tạo mới trong bảng dưới đây áp dụng cho đường GitHub retraining, không có nghĩa toàn repository chưa có khả năng học tiếp. Phase 6 vẫn ghi `research_rehearsal_only`, chưa có đánh giá học kỳ độc lập; đường chuyển DQN qua nhiều kỳ và export sang serving cần hoàn thiện. Xem [đánh giá và thiết kế lại Continual RL theo học kỳ](thiet_ke_continual_rl_theo_hoc_ky_20261027.md).
 
 ### 2.1. Những gì đã kiểm tra trực tiếp
 
