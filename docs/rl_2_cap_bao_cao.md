@@ -108,11 +108,27 @@ Lượt mở test ghi `selection_changed=false`, `learning_performed=false`, 14 
 
 ## Biểu đồ
 
-Đường liền: nhánh kế thừa; đường đứt: policy train từ đầu; đường chấm: parent cố định. Mỗi mốc validation cách 8.192 bước, điểm cuối sau update cuối ngân sách. Không chọn checkpoint tốt nhất giữa chừng. Các panel V4 trống có chủ ý vì không đủ dữ liệu, không phải đã train rồi bị mất hình.
+Đường liền: nhánh bootstrap/kế thừa; đường đứt: policy train từ đầu; đường chấm: parent cố định. Mỗi mốc validation cách 8.192 bước, điểm cuối sau update cuối ngân sách. Không chọn checkpoint tốt nhất giữa chừng. Các panel V4 trống có chủ ý vì không đủ dữ liệu, không phải đã train rồi bị mất hình.
+
+### Quy ước đọc chung
+
+- **Step:** một quyết định gán một sinh viên cho một giảng viên trong môi trường mô phỏng. Một episode hoàn thành cả cohort. Cùng các sinh viên được dùng qua nhiều episode; 131.072 step không phải 131.072 sinh viên mới.
+- **Objective / student:** tổng utility của các cặp được phân công, chia số sinh viên. Utility hiện tại là `similarity + 0,1 × preference`; vì preference thật chưa có nên điểm thực nghiệm này chủ yếu là độ tương đồng văn bản. Giá trị 0,12 không có nghĩa đúng 12% hoặc được 1,2/10 điểm khóa luận.
+- **Validation:** dữ liệu ngoài train, được dùng theo dõi và quyết định nhận model. **Final test:** tập độc lập chỉ chấm sau khi đóng băng lựa chọn, không xuất hiện trong curve training.
+- **Màu của đường:** xanh dương là PPO; tím là DQN; xanh lá là Hungarian; cam là Greedy; xám là Random. Kiểu đường phân biệt kế thừa, train từ đầu và parent cố định; màu không biểu thị accepted/rejected.
+- **Parent:** model được chấp nhận đang giữ trước lượt fit, được chấm lại trên đúng cohort mới. So candidate với parent trong cùng panel, không lấy điểm khác năm để tính mức cải thiện.
+- **V1/V2/V3:** các snapshot training, không phải các mốc step hoặc bốn vòng feedback. V1 gom lịch sử đến hết 2024; V2 là nhóm 01–05/2025; V3 gom 06–12/2025. V4 chưa đủ dữ liệu.
+- **Accepted/rejected:** quyết định theo gate đã chốt. Candidate có thể tăng trên kỳ mới nhưng vẫn bị từ chối nếu làm giảm một holdout cũ. `Accepted` ở bootstrap/đối chứng từ đầu không có phép so với parent và không chứng minh đã vượt Hungarian.
+
+Mỗi panel có cohort, quota và tập giảng viên khả dụng riêng. Trục dọc cũng có thể khác nhau; chỉ so các phương pháp trong cùng panel. Các đường nối các mốc đo thật, không bổ sung quan sát giữa hai mốc. Không có dải tin cậy vì hiện chỉ chạy một seed.
 
 ### Điểm validation theo bước thêm
 
-Các đường lên/xuống là điểm thực trên cùng cohort. Cần so từng panel, không xếp hạng các năm bằng raw score giữa cohort khác nhau.
+**Trục X** là số bước thêm trong riêng lượt fit hiện tại, từ 0 đến 131.072. **Trục Y** là objective trung bình trên validation; càng cao càng tốt. Chấm trên đường là mốc đo thật, không phải một lần nhận feedback mới. Đường chấm ngang là parent giữ nguyên trọng số, được chấm trên cùng dữ liệu với đường đang train.
+
+Cách đọc: lấy một panel, so đường learner với parent và các baseline ở cùng mốc. Cao hơn parent cho thấy điểm kỳ mới tốt hơn tại mốc đó; cao hơn ở giữa quá trình chưa đủ để nhận model vì protocol chọn checkpoint cuối và còn kiểm tra holdout cũ.
+
+Ở V1, DQN kết thúc khoảng 0,118531, PPO khoảng 0,108544, còn Hungarian khoảng 0,119531. DQN gần nghiệm tối ưu hơn PPO trên validation V1. Các đường đổi lên/xuống cho thấy train thêm không bảo đảm tăng đều. Validation chỉ 4/9/7 sinh viên nên thay đổi vài lựa chọn có thể tạo bước nhảy lớn; đường phẳng cũng chưa chứng minh hội tụ.
 
 ![Điểm validation theo bước thêm](assets/rl_2_cap/validation_steps.png)
 
@@ -120,7 +136,11 @@ Các đường lên/xuống là điểm thực trên cùng cohort. Cần so từ
 
 ### Bộ đếm bước của lineage
 
-V3 bắt đầu ở 131.072 vì giữ trọng số V1 qua V2; không bắt đầu ở 262.144 của candidate V2 đã bị loại.
+Trục Y giống hình trước, nhưng **trục X cộng cả số bước đang nằm trong checkpoint parent**. Đây là tuổi training của nhánh trọng số, không phải tổng chi phí mọi thí nghiệm.
+
+V1 chạy từ 0 đến 131.072. Candidate V2 chạy từ 131.072 đến 262.144 rồi bị từ chối. Vì vậy candidate V3 lại bắt đầu ở 131.072 của V1 được giữ, sau đó tới 262.144. Điều này không phải train V3 từ đầu; nó là bỏ trọng số V2 thất bại và tiếp tục đúng checkpoint đã chấp nhận.
+
+Các đối chứng từ đầu bắt đầu ở 0. Tổng 1.310.720 bước của cả thí nghiệm không có nghĩa một model đã học liên tục 1.310.720 bước.
 
 ![Bộ đếm bước của lineage](assets/rl_2_cap/validation_cumulative_steps.png)
 
@@ -128,7 +148,11 @@ V3 bắt đầu ở 131.072 vì giữ trọng số V1 qua V2; không bắt đầ
 
 ### Khoảng cách tới Hungarian
 
-Càng gần 0 càng tốt. Đây là upper bound của objective tuyến tính đang chấm; không phải xác suất phân công đúng.
+Trục X là bước thêm; **trục Y = điểm Hungarian − điểm model** trên cùng validation và ràng buộc. Càng gần 0 càng tốt; 0 nghĩa là model đạt cùng objective tối ưu trong bối cảnh đó.
+
+Ví dụ cuối V1: regret DQN xấp xỉ 0,001000; regret PPO xấp xỉ 0,010987. DQN mất ít điểm hơn so với Hungarian ở case này. Một đường regret đi lên nghĩa là model đang rời xa mức tối ưu, dù loss train có thể đang giảm.
+
+Hungarian giải tối ưu objective tuyến tính hiện dùng với toàn bộ ma trận điểm; policy RL không thấy đầy đủ điểm tương lai. Vì vậy đường này đo khoảng cách đến oracle của bài toán mô phỏng, không đo sai số điểm khóa luận hoặc độ hài lòng. Với đúng cùng objective/ràng buộc, không kỳ vọng RL vượt nghiệm tối ưu này.
 
 ![Khoảng cách tới Hungarian](assets/rl_2_cap/hungarian_regret.png)
 
@@ -136,7 +160,11 @@ Càng gần 0 càng tốt. Đây là upper bound của objective tuyến tính �
 
 ### Return trên train
 
-Rolling mean tối đa 100 episode, chia theo số sinh viên; có completion bonus/shaping. Return train không đồng nhất objective validation.
+**Trục X** là bước thêm. **Trục Y** là trung bình tổng reward của tối đa 100 episode vừa hoàn tất, chia số sinh viên trong cohort train. Đây là đường đã lấy trung bình cửa sổ, không phải từng episode riêng.
+
+Các đường tăng khá rõ cho thấy policy đang nhận nhiều reward hơn trong môi trường train. Ở V2/V3, nhiều đường kế thừa bắt đầu cao hơn đối chứng từ đầu; điều này phù hợp với việc đã có trọng số cũ, nhưng chưa chứng minh ưu thế trên dữ liệu ngoài train.
+
+Reward có completion bonus và shaping, còn objective validation là utility không chiết khấu. Train cũng có exploration và thứ tự sinh viên được xáo trộn. Bởi vậy return tăng trong khi validation dao động không mâu thuẫn. Không so raw return giữa hai panel khác cohort để kết luận model năm sau tốt hơn.
 
 ![Return trên train](assets/rl_2_cap/training_return.png)
 
@@ -144,7 +172,11 @@ Rolling mean tối đa 100 episode, chia theo số sinh viên; có completion bo
 
 ### Loss của PPO và DQN
 
-Hai trục thang riêng; raw loss chỉ lấy mẫu hiển thị khi quá dày. Không so trực tiếp độ lớn loss PPO với DQN hoặc dùng loss giảm để kết luận test tăng.
+**Trục X** là bước thêm; **trục Y** là loss được learner ghi sau cập nhật. Màu trong hình này phân biệt phiên bản V1/V2/V3; hai panel đã tách PPO và DQN. Đường đứt vẫn là đối chứng từ đầu. Dữ liệu dày được lấy mẫu hiển thị tối đa 2.000 điểm mỗi fit; log gốc vẫn giữ các update.
+
+Loss PPO là tổng các thành phần policy/value của thuật toán; có thể âm và không bắt buộc tiến về 0. Dao động quanh một vùng không tự động là lỗi. Loss DQN ở đây là Smooth L1 giữa Q dự đoán và target; giá trị nhỏ nghĩa là sai lệch nhỏ trên các batch đang đo. Target và batch cũng thay đổi khi học, nên đây không phải sai số trên một tập đích cố định.
+
+Không so 0,01 của DQN với −0,02 của PPO để chọn learner tốt hơn. Cũng không dùng loss thấp để kết luận phân công tốt: cần đối chiếu validation, holdout cũ và test. Ví dụ DQN có loss nhỏ về cuối nhưng candidate V3 vẫn làm giảm điểm V1 cũ.
 
 ![Loss của PPO và DQN](assets/rl_2_cap/training_loss.png)
 
@@ -152,7 +184,11 @@ Hai trục thang riêng; raw loss chỉ lấy mẫu hiển thị khi quá dày. 
 
 ### So sánh cuối 131.072 bước trên validation
 
-Mỗi cột là checkpoint cuối ngân sách, gồm cả candidate bị từ chối. Accepted bootstrap không có nghĩa vượt Hungarian.
+Đây là ảnh chụp kết quả **chỉ ở checkpoint cuối ngân sách**, không phải điểm tốt nhất từng đạt. Trục X là các phương pháp/candidate; trục Y là objective trung bình, càng cao càng tốt. Màu xanh dương/tím phân biệt PPO/DQN; cột gạch chéo là policy từ đầu. Các nhãn accepted/rejected ghi quyết định của lượt đó.
+
+Ở V3, PPO kế thừa đạt 0,122640, PPO từ đầu đạt 0,135579 và Hungarian đạt 0,146125. Trên validation V3, train từ đầu cao hơn warm candidate trong cấu hình này. Nhưng không suy ra kết luận chung vì chỉ có một seed và thứ hạng có thể khác trên test.
+
+Accepted của đối chứng từ đầu chỉ là qua kiểm tra bootstrap/an toàn, không có phép so parent hoặc holdout lịch sử như nhánh kế thừa. Một candidate có điểm mới tăng vẫn có thể rejected: PPO V3 tăng 0,004145 so với parent trên V3 nhưng làm giảm V2 cũ 0,008966.
 
 ![So sánh cuối 131.072 bước trên validation](assets/rl_2_cap/final_comparison.png)
 
@@ -160,7 +196,11 @@ Mỗi cột là checkpoint cuối ngân sách, gồm cả candidate bị từ ch
 
 ### Giữ chất lượng trên bối cảnh cũ
 
-Đỏ: giảm so với policy thực sự được giữ; xanh: tăng. V2 chưa từng được nhận vào trọng số nhưng vẫn là bối cảnh cũ cần kiểm tra, không gọi nó là kiến thức đã học thành công.
+**Cột** là phiên bản đang train; **hàng** là holdout cũ được chấm lại. Giá trị ô bằng `điểm parent trên holdout cũ − điểm candidate trên holdout cũ`. Đỏ/dương là giảm chất lượng; xanh/âm là tăng chất lượng. Ô trắng thiếu dữ liệu là không áp dụng, không phải điểm bằng 0.
+
+Ví dụ ô PPO, cột V3/hàng V2 là +0,0090: cập nhật V3 làm mất khoảng 0,009 điểm trên holdout V2. Đây là lý do từ chối PPO V3 dù điểm kỳ mới tăng. Ô DQN, cột V3/hàng V1 là +0,0224: giảm khá mạnh trên V1. Ngược lại, ô PPO trên V1 khoảng −0,0110 là cải thiện.
+
+Các ô trong V3 đều so với policy thực sự được giữ là V1, không so với trọng số V2 đã bị loại. V2 là bối cảnh lịch sử cần bảo toàn hiệu năng, không phải một bản học V2 đã được chấp nhận thành công. Hình này cho biết trade-off của cập nhật, chưa xác định riêng nguyên nhân gây quên.
 
 ![Giữ chất lượng trên bối cảnh cũ](assets/rl_2_cap/forgetting_heatmap.png)
 
@@ -168,7 +208,11 @@ Mỗi cột là checkpoint cuối ngân sách, gồm cả candidate bị từ ch
 
 ### Thời gian và tính khả thi
 
-Chạy hai process trên máy hiện tại; thời gian không phải benchmark tốc độ cô lập. Coverage/zero violations chủ yếu phản ánh hard mask và quota, không phải hiệu quả học vụ.
+Ba panel lần lượt là **thời gian thực đo bằng giây**, **coverage phần trăm sinh viên được phân công**, và **số vi phạm ràng buộc**. Mỗi vị trí X là một lượt fit; màu phân biệt learner.
+
+Các fit ở khoảng 500–700 giây. Vì chạy hai process trên máy đang dùng, không dùng vài chục giây chênh lệch để kết luận thuật toán nào luôn nhanh hơn. Đây không phải benchmark tốc độ cô lập hoặc thời gian phục vụ thực tế.
+
+Coverage 100% nghĩa là tất cả sinh viên trong case đánh giá có một phân công hợp lệ; không có nghĩa phù hợp học thuật 100%. Panel vi phạm nhìn trống vì tất cả giá trị bằng 0, không phải mất dữ liệu. Hard mask/quota đóng vai trò lớn trong hai kết quả khả thi này.
 
 ![Thời gian và tính khả thi](assets/rl_2_cap/runtime_constraints.png)
 
@@ -176,7 +220,11 @@ Chạy hai process trên máy hiện tại; thời gian không phải benchmark 
 
 ### Lượt smoke 1.024 bước và lượt 131.072 bước
 
-Dùng cùng validation suite. Quỹ đạo parent cũng thay đổi nên không quy toàn bộ chênh lệch cho số bước.
+Mỗi cặp cột so một learner/phiên bản trên cùng validation: xám là lần smoke ngắn, xanh là lần ngân sách dài. Trục Y vẫn là objective, càng cao càng tốt.
+
+PPO V1 tăng từ khoảng 0,071804 lên 0,108544; DQN V1 gần như giữ nguyên 0,118531. PPO V2 tăng so với smoke từ 0,081187 lên 0,112900, nhưng vẫn thấp hơn parent hiện tại trên cùng V2 là 0,119388 nên bị từ chối. Tăng so với lần thử cũ và vượt parent hiện tại là hai điều kiện khác nhau.
+
+V2/V3 ở hai thí nghiệm có thể kế thừa các parent khác nhau. Do đó đây là so sánh hai ngân sách/quỹ đạo, không cô lập tác động nhân quả của chỉ số step. Không có cặp DQN V3 vì lần smoke trước không hoàn tất case đó; không đọc phần thiếu thành điểm 0.
 
 ![Lượt smoke 1.024 bước và lượt 131.072 bước](assets/rl_2_cap/smoke_vs_long.png)
 
@@ -184,7 +232,13 @@ Dùng cùng validation suite. Quỹ đạo parent cũng thay đổi nên không 
 
 ### Kết quả final test sau lựa chọn đóng băng
 
-Phân biệt model được giữ, candidate và đối chứng. Biểu đồ này không xuất hiện trong vòng training hoặc chọn checkpoint.
+Hàng trên là objective test, càng cao càng tốt. Hàng dưới là regret so với Hungarian trên test, càng thấp càng tốt. Mỗi cột panel là một cohort test với n=4/14/11, không phải các mốc training.
+
+`Selected/retained` là checkpoint đã được chọn theo validation; `candidate` là bản cuối đã train, kể cả bị từ chối; `scratch` là policy từ đầu. Checkpoint V1 xuất hiện dưới nhiều vai trò ở V1 vì bootstrap được dùng chung, không phải ba lần train độc lập.
+
+Ví dụ test V2: DQN được giữ đạt 0,148416; PPO được giữ đạt 0,130587; Hungarian đạt 0,191483. DQN được giữ cao hơn PPO trong điểm đo này, nhưng vẫn còn khoảng cách tới nghiệm tối ưu. Ở test V3, cả hai model được giữ còn thấp hơn Greedy.
+
+Một số candidate PPO bị từ chối lại có test cao hơn model được giữ. Không chọn lại theo các cột test: lựa chọn đã đóng băng trước khi mở test; đổi lựa chọn lúc này sẽ làm test trở thành dữ liệu chọn model. Không có confidence interval nhiều seed, nên chưa kết luận ưu thế thống kê hoặc hiệu quả học vụ.
 
 ![Kết quả final test sau lựa chọn đóng băng](assets/rl_2_cap/final_test_comparison.png)
 
