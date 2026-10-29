@@ -69,8 +69,28 @@ def test_callback_requires_bound_one_time_state(tmp_path, monkeypatch):
     assert client.get(f'/api/auth/callback/github?state={state}&code=x', follow_redirects=False).status_code == 400
 
 
+def training_fixture(app, tmp_path):
+    """Explicit test-only report; public CI must not depend on private runs."""
+    path = tmp_path / 'synthetic-training-report.json'
+    path.write_text(json.dumps({
+        'scope': 'synthetic_test_only',
+        'experiment': {'run_id': 'synthetic-portal-test',
+                       'plan': {'evaluation_steps': [98304, 131072], 'seeds': [42]}},
+        'jobs': [{'algorithm': a, 'actual_steps': 131072} for a in ('ppo', 'dqn')],
+        'curves': [{'algorithm': a, 'total_steps': 131072, 'validation': {
+            'objective': {'mean': .1, 'ci95': [.1, .1]}, 'mean_compatibility': {'mean': .1}}}
+            for a in ('ppo', 'dqn')],
+        'plateau': {a: {'plateau_in_tested_budget': False, 'criterion': 'synthetic', 'range': .01}
+                    for a in ('ppo', 'dqn')},
+        'selected': {'ppo': {'checkpoint_steps': 131072}, 'dqn': {'checkpoint_steps': 98304}},
+        'baselines': [{'algorithm': 'hungarian', 'metrics': {'objective': .2}}],
+        'feature_summary': {'train_validation_test': [2, 1, 1]}}), encoding='utf-8')
+    app.state.training_report = path
+
+
 def test_training_requires_authentication_and_binds_active_run(tmp_path, monkeypatch):
     app, client = portal(tmp_path, monkeypatch)
+    training_fixture(app, tmp_path)
     assert client.get('/api/rebuild/training').status_code == 401
     token = app.state.portal_store.create_session('github', '1', 'A')
     client.cookies.set('unimatch_session', token)
@@ -79,11 +99,12 @@ def test_training_requires_authentication_and_binds_active_run(tmp_path, monkeyp
     assert client.get('/api/rebuild/training').status_code == 409
 
 
-def test_training_reports_real_snapshot_without_claiming_convergence(tmp_path, monkeypatch):
+def test_training_reports_saved_snapshot_without_claiming_convergence(tmp_path, monkeypatch):
     app, client = portal(tmp_path, monkeypatch)
+    training_fixture(app, tmp_path)
     client.cookies.set('unimatch_session', app.state.portal_store.create_session('github', '1', 'A'))
     from types import SimpleNamespace
-    app.state.rebuild_service = SimpleNamespace(versions={'selection_run_id': '20261022T205827Z-16010d68'})
+    app.state.rebuild_service = SimpleNamespace(versions={'selection_run_id': 'synthetic-portal-test'})
     value = client.get('/api/rebuild/training').json()
     assert value['mode'] == 'saved_experiment'
     assert value['models']['ppo']['trained_steps'] == 131072
