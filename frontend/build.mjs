@@ -14,7 +14,7 @@ if (process.env.VERCEL === '1') {
 
 await rm("dist", { recursive: true, force: true });
 await mkdir("dist", { recursive: true });
-await Promise.all(["login.html", "landing.html", "dashboard.html", "portal.css", "portal.js", "campus-scene.js", "index.html", "style.css", "app.js", "rebuild.html", "rebuild-app.js", "rebuild-style.css", "visualization.js", "student-cohorts.js", "home-scene.js", "scene-engine.js", "matching-scene.js", "scene-layout.js", "assets"].map((file) => cp(file, `dist/${file}`, { recursive: true })));
+await Promise.all(["nested-research.js", "login.html", "landing.html", "dashboard.html", "portal.css", "portal.js", "campus-scene.js", "index.html", "style.css", "app.js", "rebuild.html", "rebuild-app.js", "rebuild-style.css", "visualization.js", "student-cohorts.js", "home-scene.js", "scene-engine.js", "matching-scene.js", "scene-layout.js", "assets"].map((file) => cp(file, `dist/${file}`, { recursive: true })));
 await mkdir("dist/vendor", { recursive: true });
 await cp("node_modules/three/build", "dist/vendor/three", { recursive: true });
 await cp("node_modules/three/LICENSE", "dist/vendor/three/LICENSE.txt");

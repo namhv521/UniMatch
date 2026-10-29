@@ -1,5 +1,8 @@
 # Báo cáo RL hai cấp
 
+**Cập nhật thí nghiệm 4R:** completed · 24/24 fit. Bộ phản hồi mô phỏng được người dùng cho phép; phần cuối báo cáo có bảng R1–R4 và biểu đồ mới. Các phần thí nghiệm 131.072 bước/fit phía trước là kết quả cũ, được giữ để đối chiếu.
+
+
 ## Kết quả chính
 
 **Đã hoàn tất 10 lượt fit, mỗi lượt 131.072 bước, tổng 1.310.720 bước thực tế; 170 mốc đo và 10 biểu đồ PNG/SVG. 101 tests đạt.**
@@ -289,3 +292,102 @@ python -X utf8 scripts/plot_nested_training.py --run data_rebuild/nested_rl_2026
 ```
 
 Chốt báo cáo: 28/10/2026 03:51 (Asia/Saigon). Dữ liệu cá nhân và checkpoint nằm trong thư mục private bị Git ignore.
+
+## Thí nghiệm bốn round với phản hồi mô phỏng
+
+Người dùng cho phép tạo dữ liệu ảo để kiểm tra đầy đủ chuỗi hai cấp, sau đó thay bằng dữ liệu thật và train lại trong namespace mới. Đây là thí nghiệm mới, giữ nguyên các artifact/test cũ.
+
+- V1: 2024.1, lịch sử đến 12/2024; V2: 2024.2, 01–05/2025; V3: 2025.1, 06–12/2025.
+- R1 dùng hồ sơ ban đầu. R2 tạo một nguyện vọng 0,8 cho giảng viên có similarity cao nhất trong nhóm đủ điều kiện, cho mỗi sinh viên train; đánh dấu preference_known. Đây là tín hiệu tương quan trực tiếp với similarity, không phải nhãn độc lập.
+- R3 tăng một chỗ nhận sinh viên cho một giảng viên đang tham gia trong mỗi cohort train. Không suy diễn đây là chỉ tiêu lịch sử thật. R4 giữ nguyên toàn bộ dữ liệu R3 và chạy thêm bước, được ghi `extra_steps_no_new_signal`.
+- Mỗi round thêm 32.768 bước, 4 round = 131.072 bước/version/thuật toán; 24 fit = 786.432 bước tính toán. Bộ đếm của model được giữ có thể thấp hơn tổng đã tính toán khi candidate bị từ chối.
+- Hai tiến trình độc lập PPO/DQN, seed 42, đo mỗi 8.192 bước. Giữ thuật toán/kiến trúc native. Mỗi round lưu input, report, curve, manifest, checkpoint trong `<experiment>/<algorithm>/Vx/Ry/<algorithm>/`.
+- Kế thừa bản được chấp nhận gần nhất qua round và qua kỳ; candidate bị từ chối vẫn được lưu nhưng không được dùng làm nguồn trọng số. Gate không cho giảm điểm kỳ hiện tại/holdout kỳ cũ. R4 không được gọi là cải thiện nhờ tín hiệu mới.
+- Validation giữ nguyên để so sánh parent/candidate trên cùng cohort; chỉ train thay đổi theo mock. Điểm này đo khả năng chuyển sang validation hồ sơ ban đầu, không đo mức đáp ứng nguyện vọng thật. Validation đã dùng trong nghiên cứu trước; không xem đây là một đánh giá độc lập mới. Không mở lại final test cũ, không tự chọn model phục vụ từ mock.
+
+### Bảng so sánh từng round
+
+Trạng thái: **completed**. Điểm là objective/student trên validation, không phải accuracy. `Δ` là candidate trừ parent trên cùng tập. Các dòng bị từ chối dùng model được giữ cho round tiếp theo.
+
+| Model | Version | Round | Bước thêm | Bước candidate | Parent | Candidate | Δ | Gate |
+|---|---|---|---:|---:|---:|---:|---:|---|
+| PPO | V1 | R1 | 32768 | 32768 | — | 0.071804 | — | accepted |
+| PPO | V1 | R2 | 32768 | 65536 | 0.071804 | 0.118651 | 0.046848 | accepted |
+| PPO | V1 | R3 | 32768 | 98304 | 0.118651 | 0.113548 | -0.005104 | rejected |
+| PPO | V1 | R4 | 32768 | 98304 | 0.118651 | 0.113548 | -0.005104 | rejected |
+| PPO | V2 | R1 | 32768 | 98304 | 0.095442 | 0.107204 | 0.011762 | accepted |
+| PPO | V2 | R2 | 32768 | 131072 | 0.107204 | 0.102171 | -0.005033 | rejected |
+| PPO | V2 | R3 | 32768 | 131072 | 0.107204 | 0.102171 | -0.005033 | rejected |
+| PPO | V2 | R4 | 32768 | 131072 | 0.107204 | 0.102171 | -0.005033 | rejected |
+| PPO | V3 | R1 | 32768 | 131072 | 0.136034 | 0.125771 | -0.010263 | rejected |
+| PPO | V3 | R2 | 32768 | 131072 | 0.136034 | 0.128436 | -0.007598 | rejected |
+| PPO | V3 | R3 | 32768 | 131072 | 0.136034 | 0.132024 | -0.004010 | rejected |
+| PPO | V3 | R4 | 32768 | 131072 | 0.136034 | 0.132024 | -0.004010 | rejected |
+| DQN | V1 | R1 | 32768 | 32768 | — | 0.118651 | — | accepted |
+| DQN | V1 | R2 | 32768 | 65536 | 0.118651 | 0.114647 | -0.004004 | rejected |
+| DQN | V1 | R3 | 32768 | 65536 | 0.118651 | 0.114647 | -0.004004 | rejected |
+| DQN | V1 | R4 | 32768 | 65536 | 0.118651 | 0.114647 | -0.004004 | rejected |
+| DQN | V2 | R1 | 32768 | 65536 | 0.105867 | 0.102505 | -0.003362 | rejected |
+| DQN | V2 | R2 | 32768 | 65536 | 0.105867 | 0.108293 | 0.002426 | rejected |
+| DQN | V2 | R3 | 32768 | 65536 | 0.105867 | 0.115652 | 0.009785 | rejected |
+| DQN | V2 | R4 | 32768 | 65536 | 0.105867 | 0.115652 | 0.009785 | rejected |
+| DQN | V3 | R1 | 32768 | 65536 | 0.115450 | 0.119453 | 0.004004 | rejected |
+| DQN | V3 | R2 | 32768 | 65536 | 0.115450 | 0.123816 | 0.008367 | accepted |
+| DQN | V3 | R3 | 32768 | 98304 | 0.123816 | 0.136298 | 0.012482 | rejected |
+| DQN | V3 | R4 | 32768 | 98304 | 0.123816 | 0.136298 | 0.012482 | rejected |
+
+### Tổng hợp từng version
+
+| Model | Version | Số fit | Tổng bước tính toán | Điểm R1 | Candidate R4 | Điểm model được giữ cuối kỳ | Số round accepted |
+|---|---|---:|---:|---:|---:|---:|---:|
+| PPO | V1 | 4 | 131072 | 0.071804 | 0.113548 | 0.118651 | 2 |
+| PPO | V2 | 4 | 131072 | 0.107204 | 0.102171 | 0.107204 | 1 |
+| PPO | V3 | 4 | 131072 | 0.125771 | 0.132024 | 0.136034 | 0 |
+| DQN | V1 | 4 | 131072 | 0.118651 | 0.114647 | 0.118651 | 1 |
+| DQN | V2 | 4 | 131072 | 0.102505 | 0.115652 | 0.105867 | 0 |
+| DQN | V3 | 4 | 131072 | 0.119453 | 0.136298 | 0.123816 | 1 |
+
+### Phân tích kết quả 4R
+
+- R2: 2/6 candidate được giữ theo gate; không đồng nghĩa có hiệu quả thống kê hoặc tác dụng nhân quả của tín hiệu.
+- R3: 0/6 candidate được giữ theo gate; không đồng nghĩa có hiệu quả thống kê hoặc tác dụng nhân quả của tín hiệu.
+- R4: 0/6 candidate được giữ theo gate; không đồng nghĩa có hiệu quả thống kê hoặc tác dụng nhân quả của tín hiệu.
+- DQN V2/R2: điểm kỳ hiện tại tăng 0.002426, nhưng holdout cũ giảm tối đa 0.000120; vì vậy không kế thừa candidate này.
+- DQN V2/R3: điểm kỳ hiện tại tăng 0.009785, nhưng holdout cũ giảm tối đa 0.010108; vì vậy không kế thừa candidate này.
+- DQN V2/R4: điểm kỳ hiện tại tăng 0.009785, nhưng holdout cũ giảm tối đa 0.010108; vì vậy không kế thừa candidate này.
+- DQN V3/R1: điểm kỳ hiện tại tăng 0.004004, nhưng holdout cũ giảm tối đa 0.004004; vì vậy không kế thừa candidate này.
+- DQN V3/R3: điểm kỳ hiện tại tăng 0.012482, nhưng holdout cũ giảm tối đa 0.005983; vì vậy không kế thừa candidate này.
+- DQN V3/R4: điểm kỳ hiện tại tăng 0.012482, nhưng holdout cũ giảm tối đa 0.005983; vì vậy không kế thừa candidate này.
+- R4 không bổ sung phản hồi điều phối; nếu R3 bị từ chối và R4 dùng lại cùng nguồn trọng số, cùng seed và cùng ngân sách, hai candidate có thể cho kết quả giống nhau. Không cộng bước candidate bị loại vào bộ đếm của model được giữ.
+
+### Đọc các biểu đồ mới
+
+![So sánh điểm cuối từng round](../frontend/assets/nested-rl/round-comparison.png)
+
+![So sánh các mốc step từng round](../frontend/assets/nested-rl/step-curves.png)
+
+- Biểu đồ điểm cuối theo round đặt các candidate cạnh nhau. Nhìn riêng từng version; giá trị cuối không đồng nghĩa model đã được gate chấp nhận.
+- Biểu đồ step gồm 12 panel V1–V3 × R1–R4. Đường chấm là parent cố định trên cùng validation; đường liền là candidate tại các mốc đo thật. Không có dải tin cậy vì chỉ một seed.
+- Tăng từ R3 sang R4 chỉ cho thấy tác động của train tiếp cùng dữ liệu; không chứng minh phản hồi điều phối có ích.
+- So R2 với R1 chưa cô lập tác dụng preference vì cả dữ liệu và số bước cùng thay đổi. Cần đối chứng ngân sách tương đương khi nghiên cứu nhân quả.
+
+### Chạy lại với dữ liệu thật
+
+Thay hai suite `<feedback>/Vx/R2.json`, `R3.json` bằng input có nguồn phản hồi thật và đã áp dụng đúng thay đổi; giữ tín hiệu `student_preference`/`advisor_feedback` cùng hash/snapshot. Chạy `run_four_round_research.py --preflight` rồi tạo output mới. Không sửa mock hoặc checkpoint cũ, không biến tên người hướng dẫn trong luận văn thành nguyện vọng.
+
+Các script: `prepare_mock_round_feedback.py` tạo mock tách biệt; `run_four_round_research.py` điều phối; `export_four_round_results.py` xuất aggregate cho web. JSON public chỉ chứa metric, không xuất mã/tên sinh viên hoặc nội dung phản hồi. Website hiển thị riêng nghiên cứu mock; model phân bổ phục vụ không bị thay ngầm.
+
+Exporter hiện dành riêng cho protocol mock seed 42, 32.768 bước/round; nó từ chối scope dữ liệu thật hoặc ngân sách khác để tránh gắn nhãn sai. Khi có phản hồi thật, cần cập nhật protocol xuất bản và nhãn web cùng với thí nghiệm mới.
+
+### Artifact và kiểm chứng
+
+- Root: `data_rebuild/nested_rl_20261028/20261027T190955Z/mock_four_round_long/`; feedback riêng: `mock_four_round_feedback/` trong cùng fresh run. Không đưa dữ liệu sinh viên/checkpoint vào Git.
+- `ppo/V1/R1/ppo/checkpoint/` là ví dụ thư mục model; tương tự cho V1–V3, R1–R4 và DQN. `comparison.json` mỗi thuật toán ghi artifact, parent, nguồn trọng số được giữ và bộ đếm; ledger retained giữ riêng các candidate bị loại.
+- Kiểm tra cuối: 24 bundle native hợp lệ, 786.432 bước tính toán; 22 warm start khớp trọng số parent; cả 24 reload/inference parity đúng; R4 giống R3 về train/validation/contract ở cả sáu cặp. Chi tiết lưu `audit.json` tại root thí nghiệm.
+- Regression hiện có: 595 passed, 3 skipped; bộ kiểm tra điều phối/xuất bản mới nhất: 4 passed. Frontend check/build thành công. Không chấm lại final test cũ.
+
+Ví dụ chạy một thuật toán; đổi output sang thư mục chưa tồn tại nếu muốn chạy lại:
+
+```powershell
+python -X utf8 scripts/run_four_round_research.py --suites data_rebuild/nested_rl_20261028/20261027T190955Z/research/suites --feedback data_rebuild/nested_rl_20261028/20261027T190955Z/mock_four_round_feedback --output data_rebuild/nested_rl_20261028/20261027T190955Z/mock_four_round_long/ppo --algorithms ppo --timesteps 32768 --eval-interval 8192
+```
