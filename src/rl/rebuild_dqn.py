@@ -195,7 +195,7 @@ class MaskedDQN:
         self.gradient_updates += 1
         return float(loss.detach())
 
-    def learn(self, env, total_timesteps, *, epsilon_start=1., epsilon_end=.05):
+    def learn(self, env, total_timesteps, *, epsilon_start=1., epsilon_end=.05, progress_callback=None):
         steps = _integer(total_timesteps, 'total_timesteps')
         start = _number(epsilon_start, 'epsilon_start', upper=1.)
         end = _number(epsilon_end, 'epsilon_end', upper=1.)
@@ -223,6 +223,7 @@ class MaskedDQN:
         if expected is not None and _json(expected) != _json(getattr(env, 'state_contract', None)):
             raise ValueError('environment contract mismatch')
         losses, loss_steps, episodes, seen, encountered = [], [], 0, set(), set()
+        episode_rewards, current_return = [], 0.
         def reset():
             obs, info = env.reset(seed=int(self.rng.integers(0, 2**31 - 1)))
             cohort_index = info.get('problem_index', next(iter(cohorts)) if len(cohorts) == 1 else None)
@@ -251,6 +252,7 @@ class MaskedDQN:
             mask = _mask(env.action_masks(), (self.action_count,)).copy()
             action = self.predict(observation, mask, deterministic=False, epsilon=epsilon)
             next_obs, reward, terminated, truncated, _ = env.step(action)
+            current_return += float(reward)
             next_mask = _mask(env.action_masks(), (self.action_count,)).copy()
             self.replay.add(observation, action, reward, next_obs, terminated, next_mask,
                             truncated=truncated, current_mask=mask)
@@ -263,10 +265,17 @@ class MaskedDQN:
             observation = next_obs
             if terminated or truncated:
                 episodes += 1; self.total_episodes += 1
+                episode_rewards.append({'timesteps':self.total_timesteps,'reward':current_return})
+                current_return = 0.
                 if local_step + 1 < steps:
                     observation, ids, cohort_index = reset(); position = 0
+            if progress_callback:
+                progress_callback({'timesteps':self.total_timesteps,'episodes':episodes,
+                    'mean_episode_reward':float(np.mean([r['reward'] for r in episode_rewards[-100:]])) if episode_rewards else None,
+                    'loss':losses[-1] if losses else None,'epsilon':epsilon})
         return dict(actual_timesteps=steps, total_timesteps=self.total_timesteps, episodes=episodes,
                     gradient_updates=len(losses), losses=losses, loss_steps=loss_steps,
+                  episode_rewards=episode_rewards,
                     training_unique_student_count=len(seen), training_available_student_count=len(allowed),
                     training_encountered_student_ids=sorted(seen), training_transition_count=steps,
                     training_encountered_cohort_count=len(encountered), training_provenance=provenance,

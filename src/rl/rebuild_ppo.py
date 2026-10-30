@@ -1,5 +1,6 @@
 """MaskablePPO with explicit masks, train-only provenance and state-only saves."""
 import json
+from collections import deque
 from pathlib import Path
 
 import numpy as np
@@ -12,18 +13,30 @@ from src.data_pipeline.review_decisions import record_hash
 
 
 class _TrainingLog(BaseCallback):
-    def __init__(self,allowed_students):
+    def __init__(self,allowed_students,progress_callback=None):
         super().__init__(); self.students=set(); self.losses=[]; self.episodes=0
         self.allowed_students=set(allowed_students)
+        self.progress_callback=progress_callback; self.episode_rewards=[]
+        self.recent_returns=deque(maxlen=100); self.current_return=0.
 
     def _on_step(self):
+        self.current_return+=float(np.asarray(self.locals.get('rewards',[0.])).sum())
         for info in self.locals.get('infos',[]):
             decision=info.get('decision')
             if decision:
                 if decision['student_id'] not in self.allowed_students:
                     raise ValueError('ppo_rollout_outside_training_cohorts')
                 self.students.add(decision['student_id'])
-            if info.get('final_validation'): self.episodes+=1
+            if info.get('final_validation'):
+                self.episodes+=1
+                self.recent_returns.append(self.current_return)
+                self.episode_rewards.append({'timesteps':int(self.model.num_timesteps),'reward':self.current_return})
+                self.current_return=0.
+        if self.progress_callback:
+            values=self.model.logger.name_to_value
+            self.progress_callback({'timesteps':int(self.model.num_timesteps),'episodes':self.episodes,
+                'mean_episode_reward':float(np.mean(self.recent_returns)) if self.recent_returns else None,
+                'loss':float(values['train/loss']) if 'train/loss' in values else None,'epsilon':None})
         return True
 
     def _capture(self):
@@ -37,7 +50,9 @@ class _TrainingLog(BaseCallback):
                 'entropy_loss':float(values['train/entropy_loss']),
                 'approx_kl':float(values['train/approx_kl'])})
 
-    def _on_rollout_end(self): self._capture()
+    # The previous rollout has been optimized before the next rollout starts.
+    # Logging at rollout end would stamp the preceding update one rollout late.
+    def _on_rollout_start(self): self._capture()
     def _on_training_end(self): self._capture()
 
 
@@ -82,16 +97,17 @@ class MaskedPPOAgent:
             raise RuntimeError('invalid_masked_ppo_probabilities')
         return values
 
-    def learn(self,total_timesteps):
+    def learn(self,total_timesteps,*,progress_callback=None):
         provenance=self.env.training_provenance
         if not provenance or any(row['metadata'].get('split')!='train' for row in provenance):
             raise ValueError('ppo_train_only_cohorts_required')
         if type(total_timesteps) is not int or total_timesteps<1:
             raise ValueError('positive_training_timesteps_required')
-        log=_TrainingLog({s for row in provenance for s in row['student_ids']}); before=int(self.model.num_timesteps)
+        log=_TrainingLog({s for row in provenance for s in row['student_ids']},progress_callback); before=int(self.model.num_timesteps)
         self.model.learn(total_timesteps=total_timesteps,callback=log,reset_num_timesteps=False)
         return {'requested_timesteps':total_timesteps,'actual_timesteps':int(self.model.num_timesteps)-before,
             'epochs_completed':int(self.model._n_updates),'episodes':log.episodes,'losses':log.losses,
+            'episode_rewards':log.episode_rewards,
             'training_unique_student_count':len(log.students),
             'training_available_student_count':len({s for row in provenance for s in row['student_ids']}),
             'training_provenance':provenance,'training_provenance_sha256':record_hash(provenance),

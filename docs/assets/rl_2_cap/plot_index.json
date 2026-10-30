@@ -1,0 +1,72 @@
+[
+  {
+    "name": "validation_steps",
+    "path": "validation_steps.png",
+    "svg_path": "validation_steps.svg",
+    "title": "Validation objective across training steps",
+    "description": "Measured validation checkpoints; no interpolation, smoothing, confidence interval or final-test evaluation. Missing fits stay blank."
+  },
+  {
+    "name": "validation_cumulative_steps",
+    "path": "validation_cumulative_steps.png",
+    "svg_path": "validation_cumulative_steps.svg",
+    "title": "Validation objective across inherited lineage steps",
+    "description": "Measured validation checkpoints; no interpolation, smoothing, confidence interval or final-test evaluation. Missing fits stay blank."
+  },
+  {
+    "name": "hungarian_regret",
+    "path": "hungarian_regret.png",
+    "svg_path": "hungarian_regret.svg",
+    "title": "Gap to Hungarian on the same validation cohort",
+    "description": "Measured validation checkpoints; no interpolation, smoothing, confidence interval or final-test evaluation. Missing fits stay blank."
+  },
+  {
+    "name": "training_return",
+    "path": "training_return.png",
+    "svg_path": "training_return.svg",
+    "title": "Training episode return per student — rolling last 100 completed episodes",
+    "description": "Mean of the latest 100 completed training episodes (all completed if fewer), normalized by train cohort size. Reward includes completion bonus and shaping; it is not the validation objective or a causal cross-cohort comparison."
+  },
+  {
+    "name": "training_loss",
+    "path": "training_loss.png",
+    "svg_path": "training_loss.svg",
+    "title": "Training loss by learner and fit",
+    "description": "Raw loss values with deterministic display subsampling for dense logs; no smoothing. PPO and DQN losses use separate axes and are not directly comparable."
+  },
+  {
+    "name": "final_comparison",
+    "path": "final_comparison.png",
+    "svg_path": "final_comparison.svg",
+    "title": "Final validation comparison",
+    "description": "Candidate point estimates and classical baselines on the same cohort; accepted is a research gate, not superiority to Hungarian. No cross-semester raw-score ranking."
+  },
+  {
+    "name": "forgetting_heatmap",
+    "path": "forgetting_heatmap.png",
+    "svg_path": "forgetting_heatmap.svg",
+    "title": "Frozen historical holdout forgetting",
+    "description": "Signed objective drop on exact frozen prior validation cohorts. Red positive is degradation; blue negative is improvement. Missing observations remain masked."
+  },
+  {
+    "name": "runtime_constraints",
+    "path": "runtime_constraints.png",
+    "svg_path": "runtime_constraints.svg",
+    "title": "Runtime and feasibility",
+    "description": "Elapsed time is measured wall time from the run; coverage and constraint counts are final validation quantities, not academic quality."
+  },
+  {
+    "name": "smoke_vs_long",
+    "path": "smoke_vs_long.png",
+    "svg_path": "smoke_vs_long.svg",
+    "title": "Smoke and long-budget validation results",
+    "description": "Budget comparison also changes inherited parent trajectory; it is not an isolated causal effect of extra steps. One seed, no confidence interval."
+  },
+  {
+    "name": "final_test_comparison",
+    "path": "final_test_comparison.png",
+    "svg_path": "final_test_comparison.svg",
+    "title": "One-time final-test comparison after frozen selection",
+    "description": "Selected/retained, final warm candidates and from-scratch controls were fixed before the final test was opened. Duplicate checkpoints can appear under different roles but reuse cached evaluation; bars are not independent samples. Final test is absent from training curves and model selection. One seed and small n; no confidence interval or academic-effectiveness claim."
+  }
+]
