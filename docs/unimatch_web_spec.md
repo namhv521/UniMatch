@@ -93,7 +93,7 @@ Ngưỡng là số nguyên 0–100, áp dụng điều kiện `100 × E4 ≥ thr
 | `POST /api/thesis/threshold` | Trưởng khoa | `threshold` |
 | `POST /api/thesis/proposal` | Trưởng khoa | `advisor_ids`, trả về chỉ tiêu và cặp nháp |
 | `POST /api/thesis/publish` | Trưởng khoa | `id` của phương án |
-| `POST /api/rebuild/assistant` | Đã đăng nhập | `question`, có thể kèm `previous_question` |
+| `POST /api/rebuild/assistant` | Sinh viên | `question`, có thể kèm `previous_question` |
 
 ## Kiểm tra tích hợp
 

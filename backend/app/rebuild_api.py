@@ -55,8 +55,9 @@ def create_app(*, service=None, token=None, output=None, selection_manifest=None
             if origin and origin != expected_origin and origin not in origins:
                 raise HTTPException(403, detail='origin_not_allowed')
             user = app.state.portal_authenticated(request)
-            if request.url.path != '/api/rebuild/assistant' and user.get('role', 'student') != 'dean':
-                raise HTTPException(403, detail='dean_required')
+            is_assistant = request.url.path == '/api/rebuild/assistant'
+            if user.get('role', 'student') != ('student' if is_assistant else 'dean'):
+                raise HTTPException(403, detail='student_required' if is_assistant else 'dean_required')
             return user['id']
         if production:
             raise HTTPException(401, detail='login_required')

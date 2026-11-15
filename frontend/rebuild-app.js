@@ -9,10 +9,6 @@ const state = { bootstrap: null, base: "", token: "", selected: new Set(), cohor
 let timer;
 let previewedWorkbook;
 let replayScene, loadingReplay, pageClosed;
-let chatPending = false;
-let chatOpener;
-let previousChatQuestion;
-const chatSuggestions = document.querySelectorAll("#chat-suggestions [data-question]");
 
 function nameStudent(id) { return state.cohort?.students?.find((s) => s.student_id === id)?.student_name || id; }
 function nameAdvisor(id) { return state.bootstrap?.advisors?.find((a) => a.advisor_id === id)?.advisor_name || id; }
@@ -55,7 +51,6 @@ function updateControls() {
   $("checkpoint-version").disabled = !ready;
   $("export-json").disabled = !state.comparison || state.busy;
   $("export-csv").disabled = !currentResult()?.assignments?.length || state.busy;
-  updateChatControls();
 }
 function busy(value, text = "") { state.busy = value; document.body.setAttribute("aria-busy", String(value)); updateControls(); if (text) message(text); }
 
@@ -108,7 +103,6 @@ async function connect() {
     $("model-status").innerHTML = (state.bootstrap.algorithms || []).toSorted((a,b)=>["ppo","dqn","hungarian","greedy","random"].indexOf(a.id)-["ppo","dqn","hungarian","greedy","random"].indexOf(b.id)).map(a => `<div class="model-row"><b>${escape(labels[a.id] || a.id)}</b><small>${baselineNotes[a.id] || (retrospective ? 'Mô hình nghiên cứu · tài liệu hồi cứu' : 'Học tăng cường · dữ liệu nguồn đã duyệt')}</small><span class="${a.ready ? 'status-good' : 'status-warn'}">${a.ready ? 'Sẵn sàng' : 'Chưa khả dụng'}</span></div>`).join('');
     renderAdvisors(); renderQuota(); message("");
   } catch(error) {
-    if (!state.bootstrap) $("assistant-status").textContent = "Chưa kết nối được. Tải lại trang để thử lại.";
     message(errorMessage(error), "error");
   }
   finally { busy(false); }
@@ -290,108 +284,6 @@ async function exportCsv() {
   }
 }
 
-function updateChatControls() {
-  const ready = state.bootstrap?.assistant_ready === true;
-  $("assistant-question").disabled = !ready;
-  $("ask").disabled = !ready || chatPending;
-  for (const button of chatSuggestions) button.disabled = $("ask").disabled;
-  if (!state.bootstrap) return;
-  const status = ready ? "Tra cứu danh mục giảng viên và dẫn nguồn" : "Trợ lý chưa khả dụng.";
-  if ($("assistant-status").textContent !== status) $("assistant-status").textContent = status;
-}
-
-function setChatOpen(open, opener = $("chat-toggle")) {
-  const panel = $("assistant");
-  if (panel.hidden === !open) return;
-  panel.hidden = !open;
-  $("chat-toggle").setAttribute("aria-expanded", String(open));
-  if (open) {
-    chatOpener = opener;
-    ($("assistant-question").disabled ? $("chat-close") : $("assistant-question")).focus({ preventScroll: true });
-  } else {
-    chatOpener?.focus({ preventScroll: true });
-  }
-}
-
-function addChatMessage(text, user = false) {
-  const node = document.createElement("article");
-  node.className = user ? "chat-bubble user" : "chat-bubble";
-  const title = document.createElement("h3");
-  title.textContent = user ? "Bạn" : "UniMatch";
-  const body = document.createElement("p");
-  body.textContent = text;
-  node.append(title, body);
-  $("chat-history").append(node);
-  return node;
-}
-
-async function ask(event) {
-  event.preventDefault();
-  const input = $("assistant-question");
-  const question = input.value.trim();
-  if ($("ask").disabled || !question) return;
-  const history = $("chat-history");
-  addChatMessage(question, true);
-  input.value = "";
-  input.focus();
-  $("chat-suggestions").hidden = true;
-  const pending = addChatMessage("Đang tìm nguồn đã duyệt…");
-  history.scrollTop = history.scrollHeight;
-  chatPending = true;
-  updateChatControls();
-  try {
-    const value = await api("/assistant", {
-      question,
-      cohort_id: state.cohort?.cohort_id || null,
-      top_k: 10,
-      ...(previousChatQuestion ? { previous_question: previousChatQuestion } : {}),
-    });
-    if (value.intent === "topic_match" || value.intent === "advisor_profile") {
-      previousChatQuestion = value.follow_up ? previousChatQuestion : question;
-    }
-    pending.querySelector("p").textContent = value.answer || "Chưa có câu trả lời phù hợp.";
-    for (const ranking of value.rankings || []) {
-      const row = document.createElement("p");
-      row.textContent = `${ranking.advisor_name} · ${ranking.score === null ? "Có nguồn khớp chủ đề" : "Điểm liên hệ chủ đề " + score(ranking.score)}`;
-      pending.append(row);
-    }
-    const sources = document.createElement("ol");
-    for (const citation of value.citations || []) {
-      let url;
-      try { url = new URL(citation.url || citation.source_url); } catch { continue; }
-      if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) continue;
-      const link = document.createElement("a");
-      link.href = url.href;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.textContent = citation.title || "Nguồn";
-      const item = document.createElement("li");
-      item.append(link);
-      if (citation.snippet && citation.snippet !== citation.title) {
-        const snippet = document.createElement("p");
-        snippet.textContent = citation.snippet;
-        item.append(snippet);
-      }
-      sources.append(item);
-    }
-    if (sources.children.length) {
-      const details = document.createElement("details");
-      const summary = document.createElement("summary");
-      summary.textContent = `Nguồn tham khảo (${sources.children.length})`;
-      details.append(summary, sources);
-      pending.append(details);
-    }
-  } catch (error) {
-    pending.querySelector("p").textContent = error.name === "AbortError"
-      ? "Trợ lý phản hồi quá lâu. Bạn có thể gửi lại câu hỏi."
-      : "Chưa tra cứu được nguồn. Bạn có thể gửi lại câu hỏi.";
-  } finally {
-    chatPending = false;
-    updateChatControls();
-    if (!$("assistant").hidden) history.scrollTop = pending.offsetTop;
-  }
-}
-
 $("template").addEventListener("click", async () => { busy(true); try { download(await api("/templates/students.csv", undefined, { blob: true }), "unimatch-students-template.csv"); } catch (e) { message(errorMessage(e), "error"); } finally { busy(false); } });
 $("csv-file").addEventListener("change", () => { state.file = $("csv-file").files[0] || null; previewedWorkbook = null; state.cohort = null; state.quotaVerified = false; state.revision++; $("file-info").textContent = state.file ? `${state.file.name} · ${number(state.file.size / 1024)} KB` : "Chưa chọn file."; $("confirm-policy").checked = false; $("import-result").textContent = "Chọn “Kiểm tra hồ sơ” để kiểm tra file mới."; clearResults(); renderQuota(); updateControls(); });
 $("import-form").addEventListener("submit", importStudents);
@@ -425,38 +317,13 @@ $("next-step").addEventListener("click", () => { stop(); state.step++; renderRep
 $("reset-replay").addEventListener("click", () => { stop(); state.step = 0; renderReplay(); });
 $("play").addEventListener("click", play); $("replay-speed").addEventListener("change", () => { if (state.playing) { stop(); play(); } });
 $("export-json").addEventListener("click", () => download(new Blob([JSON.stringify(state.comparison, null, 2)], { type: "application/json" }), "unimatch-comparison.json"));
-$("export-csv").addEventListener("click", exportCsv); $("assistant-form").addEventListener("submit", ask);
-$("chat-toggle").addEventListener("click", () => setChatOpen($("assistant").hidden));
-$("chat-close").addEventListener("click", () => setChatOpen(false));
-document.querySelector("[data-open-chat]").addEventListener("click", (event) => {
-  event.preventDefault();
-  setChatOpen(true, event.currentTarget);
-});
-$("assistant").addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    event.preventDefault();
-    setChatOpen(false);
-  }
-});
-$("chat-toggle").addEventListener("keydown", (event) => {
-  if (event.key === "Escape") setChatOpen(false);
-});
-function openChatFromHash() {
-  if (location.hash === "#assistant") setChatOpen(true);
-}
-addEventListener("hashchange", openChatFromHash);
+$("export-csv").addEventListener("click", exportCsv);
 const motionButton=$("replay-motion");
 motionButton.hidden = true;
 motionButton.addEventListener('click', () => {
   if (replayScene) motionButton.textContent = replayScene.toggle() ? 'Bật chuyển động 3D' : 'Tạm dừng chuyển động 3D';
 });
 addEventListener('pagehide',()=>{pageClosed=true;stop();replayScene?.destroy();},{once:true});
-for (const button of chatSuggestions) {
-  button.addEventListener("click", () => {
-    $("assistant-question").value = button.dataset.question;
-    $("assistant-form").requestSubmit();
-  });
-}
 updateControls(); renderReplay();
 const user=await requireSession();
 if (user?.role === 'dean') {
@@ -466,5 +333,4 @@ if (user?.role === 'dean') {
     if (response.ok) confidenceThreshold = (await response.json()).threshold;
   } catch { /* The comparison page uses the default when the term is unavailable. */ }
   await connect();
-  openChatFromHash();
 } else if (user) location.replace("./thesis.html");

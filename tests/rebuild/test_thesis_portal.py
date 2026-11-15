@@ -180,6 +180,8 @@ def test_semester_flow_is_scoped_and_preserves_accepted_places(service, tmp_path
     assert student.get('/api/rebuild/bootstrap').status_code == 403
     assert b.get('/api/rebuild/training').status_code == 403
     assert student.post('/api/rebuild/assistant', json={'question': 'Xin chào'}).status_code == 200
+    assert dean.post('/api/rebuild/assistant', json={'question': 'Xin chào'}).status_code == 403
+    assert a.post('/api/rebuild/assistant', json={'question': 'Xin chào'}).status_code == 403
     assert student.post('/api/thesis/threshold', json={'threshold': 90}).status_code == 403
     assert student.post('/api/thesis/choice', json={'advisor_id': 'b'}).status_code == 409
     answers = {'survey': {tag: 3 for tag in ASSESSMENT},

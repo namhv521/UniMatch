@@ -530,6 +530,7 @@ user = await requireSession();
 if (user) {
   $('thesis-title').textContent = titles[user.role];
   document.querySelectorAll('[data-dean]').forEach(link => { link.hidden = user.role !== 'dean'; });
+  document.querySelectorAll('[data-student]').forEach(link => { link.hidden = user.role !== 'student'; });
   $('thesis-chat').hidden = user.role !== 'student';
   try {
     await refresh();
