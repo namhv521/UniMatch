@@ -69,8 +69,10 @@ def seed_accounts(store):
             existing = db.execute('SELECT role,advisor_id,advisor_semester FROM email_accounts WHERE email=?',
                                   (email,)).fetchone()
             if existing:
-                if (existing['role'], existing['advisor_id'], existing['advisor_semester']) != (role, advisor_id, semester):
+                if (existing['role'], existing['advisor_semester']) != (role, semester):
                     raise ValueError('email_account_seed_role_conflict')
+                if role == 'faculty' and existing['advisor_id'] != advisor_id:
+                    db.execute('UPDATE email_accounts SET advisor_id=? WHERE email=?', (advisor_id, email))
                 continue
             insert_account(db, email, name, encoded, role=role, activation=activation, advisor_id=advisor_id,
                            advisor_semester=semester)

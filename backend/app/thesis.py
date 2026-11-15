@@ -9,6 +9,7 @@ from uuid import uuid4
 from fastapi import HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
+from .email_auth import normalized_email
 from .thesis_assessment import ASSESSMENT_VERSION, assess, public_assessment, scoring_row
 
 
@@ -145,7 +146,7 @@ def install_thesis(router, app, store, authenticated, check_origin):
             row = dict(record)
             ids = json.loads(row.pop('advisor_ids') or 'null')
             if ids is None:
-                row['rank'] = 1
+                row['rank'] = None if row['status'] == 'withdrawn' else 1
             else:
                 row['rank'] = ids.index(row['advisor_id']) + 1 if row['advisor_id'] in ids else None
             requests.append(row)
@@ -154,6 +155,33 @@ def install_thesis(router, app, store, authenticated, check_origin):
     def load_preference(db, user_id):
         return db.execute('SELECT advisor_ids,topic_description FROM thesis_preferences WHERE semester=? AND user_id=?',
                           (semester, user_id)).fetchone()
+
+    def load_contact(db, user_id):
+        return db.execute('SELECT email,phone FROM thesis_contacts WHERE semester=? AND user_id=?',
+                          (semester, user_id)).fetchone()
+
+    def save_contact(db, user_id, raw):
+        if not isinstance(raw, dict):
+            raise HTTPException(422, 'invalid_contact')
+        email = normalized_email(raw.get('email'))
+        phone = raw.get('phone')
+        if not isinstance(phone, str) or not re.fullmatch(r'\+?[0-9][0-9 .()-]{7,23}', phone.strip()):
+            raise HTTPException(422, 'invalid_contact')
+        phone = re.sub(r'[ .()-]', '', phone.strip())
+        if not 8 <= len(phone.lstrip('+')) <= 15:
+            raise HTTPException(422, 'invalid_contact')
+        db.execute('INSERT INTO thesis_contacts(semester,user_id,email,phone) VALUES (?,?,?,?) '
+                   'ON CONFLICT(semester,user_id) DO UPDATE SET email=excluded.email,phone=excluded.phone',
+                   (semester, user_id, email, phone))
+
+    def registered_students(db, advisor_id, requests):
+        rows = db.execute('SELECT r.user_id,u.name,c.email,c.phone FROM thesis_requests r JOIN users u ON u.id=r.user_id '
+                          'LEFT JOIN thesis_contacts c ON c.semester=r.semester AND c.user_id=r.user_id '
+                          'WHERE r.semester=? AND r.advisor_id=?',
+                          (semester, advisor_id)).fetchall() if requests else []
+        eligible = {r['user_id'] for r in requests if r['rank'] is not None}
+        return sorted(({'name': r['name'], 'email': r['email'], 'phone': r['phone']} for r in rows
+                       if r['user_id'] in eligible), key=lambda row: row['name'].casefold())
 
     def active_service():
         return app.state.rebuild_get_service()
@@ -168,10 +196,13 @@ def install_thesis(router, app, store, authenticated, check_origin):
                 row = db.execute('SELECT profile FROM thesis_students WHERE semester=? AND user_id=?',
                                  (semester, user['id'])).fetchone()
                 preference = load_preference(db, user['id'])
+                contact = load_contact(db, user['id'])
+                email_account = db.execute('SELECT email FROM email_accounts WHERE user_id=?', (user['id'],)).fetchone()
                 return {**result, 'assessment_version': ASSESSMENT_VERSION, 'assessment': public_assessment(),
                         'profile': json.loads(row['profile']) if row else None,
                         'requests': load_requests(db, user_id=user['id']),
                         'topic_description': preference['topic_description'] if preference else '',
+                        'contact': dict(contact) if contact else {'email': email_account['email'] if email_account else '', 'phone': ''},
                         'assignment': next((r for r in published['assignments'] if r['user_id'] == user['id']), None)
                         if published else None}
             if user['role'] == 'faculty':
@@ -185,7 +216,10 @@ def install_thesis(router, app, store, authenticated, check_origin):
                     (semester, user['advisor_id'])
                 ).fetchall()}
                 count = db.execute('SELECT count(*) AS total FROM thesis_students WHERE semester=?', (semester,)).fetchone()
+                advisor = next((a for a in advisor_catalog(active_service()) if a['advisor_id'] == user['advisor_id']), None)
                 return {**result, 'student_count': count['total'],
+                        'advisor_name': advisor['advisor_name'] if advisor else '',
+                        'registered_students': registered_students(db, user['advisor_id'], requests) if published else [],
                         'requests': [{**r, 'topic_description': r['topic_description'] if r['status'] != 'rejected' else None,
                                       'name': applicants[r['user_id']]['name'],
                                       'skills': json.loads(applicants[r['user_id']]['profile'])['skills']}
@@ -219,9 +253,15 @@ def install_thesis(router, app, store, authenticated, check_origin):
         return [{**advisors[j], 'score': float(scores[0, j])} for j in indices[:5]]
 
     def mutate(action, request, payload):
-        role = {'assessment': 'student', 'choice': 'student', 'topic': 'student', 'decision': 'faculty',
+        role = {'assessment': 'student', 'choice': 'student', 'topic': 'student', 'contact': 'student', 'decision': 'faculty',
                 'threshold': 'dean', 'proposal': 'dean', 'publish': 'dean'}[action]
         user = require(request, role)
+        if action == 'contact':
+            with term() as (db, _):
+                if not any(r['rank'] is not None for r in load_requests(db, user_id=user['id'])):
+                    raise HTTPException(409, 'pending_request_required')
+                save_contact(db, user['id'], payload)
+            return {'ok': True}
         if action == 'choice' and not ('advisor_ids' in payload or 'advisor_id' in payload):
             raise HTTPException(422, 'invalid_advisor_selection')
         advisor_ids = payload.get('advisor_ids', [] if payload.get('advisor_id') is None else [payload['advisor_id']])
@@ -317,10 +357,12 @@ def install_thesis(router, app, store, authenticated, check_origin):
                        "ON CONFLICT(semester,user_id,advisor_id) DO UPDATE SET status='pending'", (*args, advisor_id))
         previous = load_preference(db, student)
         upsert_preference(db, student, advisor_ids, topic_text(payload, previous['topic_description'] if previous else ''))
+        if advisor_ids and 'contact' in payload:
+            save_contact(db, student, payload['contact'])
 
     @router.post('/api/thesis/{action}')
     async def change(action: str, request: Request):
-        if action not in {'assessment', 'choice', 'topic', 'decision', 'threshold', 'proposal', 'publish'}:
+        if action not in {'assessment', 'choice', 'topic', 'contact', 'decision', 'threshold', 'proposal', 'publish'}:
             raise HTTPException(404, 'unknown_thesis_action')
         check_origin(request)
         payload = await app.state.rebuild_read_body(request)

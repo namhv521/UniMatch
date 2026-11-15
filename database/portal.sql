@@ -55,3 +55,9 @@ CREATE TABLE IF NOT EXISTS thesis_preferences (
     PRIMARY KEY (semester, user_id),
     FOREIGN KEY (semester, user_id) REFERENCES thesis_students(semester, user_id)
 );
+CREATE TABLE IF NOT EXISTS thesis_contacts (
+    semester TEXT NOT NULL, user_id TEXT NOT NULL,
+    email TEXT NOT NULL, phone TEXT NOT NULL,
+    PRIMARY KEY (semester, user_id),
+    FOREIGN KEY (semester, user_id) REFERENCES thesis_students(semester, user_id)
+);

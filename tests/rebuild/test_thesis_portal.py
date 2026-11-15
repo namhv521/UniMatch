@@ -150,7 +150,11 @@ def test_semester_flow_is_scoped_and_preserves_accepted_places(service, tmp_path
     assert b.post('/api/thesis/decision', json=decision).status_code == 409
     assert a.post('/api/thesis/decision', json={**decision, 'decision': 'rejected'}).status_code == 200
     assert student.post('/api/thesis/choice', json={'advisor_id': 'a'}).status_code == 409
-    assert student.post('/api/thesis/choice', json={'advisor_id': 'b'}).status_code == 200
+    contact = {'email': 'student@example.test', 'phone': '+84 912 345 678'}
+    assert student.post('/api/thesis/choice', json={'advisor_ids': ['b'], 'contact': contact}).status_code == 200
+    before_publication = b.get('/api/thesis')
+    assert before_publication.json()['registered_students'] == []
+    assert contact['email'] not in before_publication.text
     assert b.post('/api/thesis/decision', json=decision).status_code == 200
     assert b.post('/api/thesis/decision', json=decision).status_code == 409
     assert student.post('/api/thesis/choice', json={'advisor_id': None}).status_code == 409
@@ -167,5 +171,9 @@ def test_semester_flow_is_scoped_and_preserves_accepted_places(service, tmp_path
     refreshed = dean.post('/api/thesis/proposal', json=pool).json()
     assert dean.post('/api/thesis/publish', json={'id': refreshed['id']}).status_code == 200
     assert student.get('/api/thesis').json()['assignment']['advisor_id'] == 'b'
-    assert [r['student_name'] for r in b.get('/api/thesis').json()['assignments']] == ['student']
+    faculty = b.get('/api/thesis').json()
+    assert [r['student_name'] for r in faculty['assignments']] == ['student']
+    assert faculty['registered_students'] == [{'name': 'student', 'email': contact['email'], 'phone': '+84912345678'}]
+    assert contact['email'] not in a.get('/api/thesis').text
+    assert contact['email'] not in dean.get('/api/thesis').text
     assert second.post('/api/thesis/assessment', json=answers).status_code == 409

@@ -31,12 +31,14 @@ const errors = {
   include_accepted_advisors: 'Danh sách phân công cần gồm tất cả giảng viên đã nhận sinh viên.',
   invalid_advisor_selection: 'Chọn tối đa ba giảng viên khác nhau và xếp theo thứ tự ưu tiên.',
   invalid_topic_description: 'Mô tả đề tài cần dài tối đa 2.000 ký tự.',
+  invalid_contact: 'Nhập số điện thoại hợp lệ để giảng viên có thể liên hệ.',
+  invalid_email: 'Nhập địa chỉ email liên hệ hợp lệ.',
   invalid_registration_count: 'Cần từ 1 đến 1.000 sinh viên đã đăng ký để tạo phương án.',
   stale_or_infeasible_proposal: 'Phương án đã thay đổi hoặc không khả thi. Hãy tạo lại trước khi công bố.',
   role_required: 'Tài khoản hiện tại không có quyền thực hiện thao tác này.',
 };
 
-let user, state, catalog = [], rankings = [], catalogError = '', rankingError = '', selected, previousQuestion;
+let user, state, catalog = [], rankings = [], catalogError = '', rankingError = '', selected, previousQuestion, saving = false;
 const content = $('thesis-content');
 const notice = $('thesis-status');
 const percent = score => (score * 100).toLocaleString('vi-VN', { maximumFractionDigits: 2 }) + '%';
@@ -100,6 +102,14 @@ function topicField() {
   </label><p id="topic-guidance" class="help">Bạn có thể bổ sung sau. Giảng viên dùng mô tả này để cân nhắc nhận bạn vào nhóm hướng dẫn.</p>`;
 }
 
+function contactFields() {
+  return `<fieldset><legend>Thông tin liên hệ</legend>
+    <p class="help">Sau khi trưởng khoa công bố, các giảng viên bạn đã chọn sẽ thấy email và số điện thoại này.</p>
+    <label>Email liên hệ <input type="email" name="contact_email" autocomplete="email" maxlength="254" required value="${esc(state.contact.email)}"></label>
+    <label>Số điện thoại <input type="tel" name="contact_phone" autocomplete="tel" maxlength="24" required value="${esc(state.contact.phone)}"></label>
+  </fieldset>`;
+}
+
 function studentView() {
   const profile = state.profile;
   const accepted = state.requests.some(r => r.status === 'accepted');
@@ -131,9 +141,12 @@ function studentView() {
         ${available.map(a => `<option value="${esc(a.advisor_id)}" ${a.advisor_id === pending[index]?.advisor_id ? 'selected' : ''}>${esc(a.advisor_name)}</option>`).join('')}
         </select></label>`).join('')}</div>
       ${topicField()}
+      ${contactFields()}
       <button class="primary">${pending.length ? 'Cập nhật nguyện vọng' : 'Gửi nguyện vọng'}</button>
     </form>` : ''}
     ${accepted && !state.published ? `<form data-action="topic">${topicField()}<button class="secondary">Lưu mô tả đề tài</button></form>` : ''}
+    ${(accepted || state.published) && state.requests.some(r => r.rank) ? `<details><summary>Cập nhật thông tin liên hệ</summary>
+      <form data-action="contact">${contactFields()}<button class="secondary">Lưu thông tin liên hệ</button></form></details>` : ''}
     ${state.published && state.topic_description ? `<h3>Mô tả đề tài đã lưu</h3><p class="topic-description">${esc(state.topic_description)}</p>` : ''}
     ${canChoose && pending.length ? '<form data-action="withdraw"><button class="secondary">Rút các nguyện vọng đang chờ</button></form>' : ''}
     ${canChoose && !available.length && !catalogError ? '<p>Danh mục hiện chưa còn giảng viên để chọn.</p>' : ''}
@@ -142,9 +155,11 @@ function studentView() {
 
 function facultyView() {
   const accepted = state.requests.filter(r => r.status === 'accepted').length;
+  const pending = state.requests.filter(r => r.status === 'pending').length;
   return `<section class="work-section">
-    <h2>Nguyện vọng gửi cho bạn</h2>
+    <h2>Nguyện vọng gửi cho ${esc(state.advisor_name || 'bạn')}</h2>
     <p><strong>${state.student_count}</strong> sinh viên đã đăng ký khóa luận trong kỳ. <strong>${accepted}</strong> sinh viên đã được bạn nhận trước khi chia số chỗ còn lại.</p>
+    ${!state.published ? `<p><strong>${pending}</strong> nguyện vọng đang chờ bạn duyệt.</p>` : ''}
     ${state.requests.length ? state.requests.map(r => `<article class="thesis-applicant">
       <h3>${esc(r.name)}</h3><p>${r.rank ? `Ưu tiên ${r.rank} · ` : ''}${statusNames[r.status]}</p>
       ${skillList(r.skills.filter(s => s.status !== 'unassessed'))}
@@ -156,7 +171,14 @@ function facultyView() {
     </article>`).join('') : '<p>Sinh viên chọn bạn sẽ xuất hiện tại đây.</p>'}
     ${state.published ? `<h2>Nhóm đã công bố</h2>${state.assignments.length ?
       `<ul>${state.assignments.map(r => `<li>${esc(r.student_name)}</li>`).join('')}</ul>` : '<p>Chưa có sinh viên được phân công cho bạn.</p>'}` : ''}
-  </section>`;
+  </section>
+  ${state.published ? `<section class="work-section"><h2>Sinh viên đã đăng ký bạn hướng dẫn</h2>
+    ${state.registered_students.length ? `<div class="table-scroll" tabindex="0" role="region" aria-label="Thông tin liên hệ sinh viên">
+      <table><thead><tr><th scope="col">Họ tên</th><th scope="col">Email</th><th scope="col">Số điện thoại</th></tr></thead>
+        <tbody>${state.registered_students.map(row => `<tr><th scope="row">${esc(row.name)}</th>
+          <td>${esc(row.email || 'Chưa cung cấp')}</td><td>${esc(row.phone || 'Chưa cung cấp')}</td></tr>`).join('')}
+        </tbody></table></div>` : '<p>Chưa có sinh viên đăng ký bạn hướng dẫn trong kỳ này.</p>'}
+    </section>` : ''}`;
 }
 
 function deanView() {
@@ -257,6 +279,7 @@ content.addEventListener('submit', async event => {
   const form = event.target;
   const action = form.dataset.action;
   const data = new FormData(form);
+  const contact = {email: data.get('contact_email'), phone: data.get('contact_phone')};
   let payload;
   if (action === 'assessment') {
     const roles = data.getAll('roles');
@@ -274,14 +297,16 @@ content.addEventListener('submit', async event => {
       showStatus('Chọn các giảng viên khác nhau theo thứ tự, từ ưu tiên 1 và không bỏ trống ở giữa.', true, true);
       return;
     }
-    payload = {advisor_ids: ids, topic_description: data.get('topic_description')};
+    payload = {advisor_ids: ids, topic_description: data.get('topic_description'), contact};
   } else if (action === 'withdraw') payload = {advisor_ids: []};
   else if (action === 'topic') payload = {topic_description: data.get('topic_description')};
+  else if (action === 'contact') payload = contact;
   else if (action === 'decision') payload = {decision: event.submitter.value, user_id: form.dataset.student};
   else if (action === 'threshold') payload = {threshold: Number(data.get('threshold'))};
   else if (action === 'proposal') payload = {advisor_ids: [...new Set([...selected, ...state.accepted_advisors])]};
   else if (action === 'publish') payload = {id: state.proposal.id};
   const buttons = [...content.querySelectorAll('button:not(:disabled)')];
+  saving = true;
   buttons.forEach(button => { button.disabled = true; });
   showStatus(action === 'proposal' ? 'Đang tính phương án…' : 'Đang lưu…', false, true);
   try {
@@ -289,12 +314,14 @@ content.addEventListener('submit', async event => {
     await refresh();
     const messages = {assessment: 'Đã lưu kết quả đánh giá.', choice: 'Đã lưu nguyện vọng theo thứ tự ưu tiên.', withdraw: 'Đã rút các nguyện vọng đang chờ.',
       topic: 'Đã lưu mô tả đề tài.',
+      contact: 'Đã lưu thông tin liên hệ.',
       decision: 'Đã lưu quyết định.', threshold: 'Đã lưu ngưỡng.', publish: 'Đã công bố kết quả phân công.',
       proposal: state.proposal?.status === 'feasible' ? 'Phương án đã sẵn sàng để rà soát.' : 'Chưa có phương án khả thi.'};
     showStatus(messages[action]);
   } catch (error) {
     showStatus(error.message, true);
   } finally {
+    saving = false;
     buttons.forEach(button => { button.disabled = false; });
   }
 });
@@ -378,4 +405,23 @@ if (user) {
   } catch (error) {
     showStatus(error.message, true);
   }
+}
+
+if (user?.role === 'faculty') {
+  setInterval(async () => {
+    if (!state || document.hidden || saving || content.contains(document.activeElement)) return;
+    const previous = state;
+    try {
+      const latest = await api();
+      if (saving || state !== previous || content.contains(document.activeElement)
+          || JSON.stringify(previous) === JSON.stringify(latest)) return;
+      state = latest;
+      content.innerHTML = facultyView();
+      if (latest.published && !previous.published) showStatus('Trưởng khoa đã công bố kết quả.');
+      else if (latest.requests.some(r => r.status === 'pending'
+          && !previous.requests.some(old => old.user_id === r.user_id && old.status === 'pending'))) {
+        showStatus('Bạn có nguyện vọng hướng dẫn mới.');
+      }
+    } catch { /* Keep the last loaded faculty view if polling fails. */ }
+  }, 30000);
 }
