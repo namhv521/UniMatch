@@ -1,4 +1,5 @@
 import { confidenceLabel, requireSession } from './portal.js';
+import { mountReplay } from './allocation-replay.js';
 
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -52,6 +53,7 @@ const errors = {
 };
 
 let user, state, catalog = [], rankings = [], catalogError = '', rankingError = '', selected, previousQuestion, saving = false;
+let stopReplay = () => {};
 const content = $('thesis-content');
 const notice = $('thesis-status');
 const percent = score => (score * 100).toLocaleString('vi-VN', { maximumFractionDigits: 2 }) + '%';
@@ -239,6 +241,9 @@ function deanView() {
       <button class="primary" ${state.preferences_closed ? '' : 'disabled'}>Chốt chỉ tiêu và chạy PPO / DQN</button>
     </form>` : ''}
   </section>
+  ${proposal?.results ? `<section class="work-section" aria-labelledby="semester-replay-title">
+    <h2 id="semester-replay-title">Phát lại quá trình phân công</h2>
+    <div id="semester-replay"></div></section>` : ''}
   <section class="work-section"><h2>${state.published ? 'Kết quả đã công bố' : 'So sánh phương án phân công'}</h2>
     ${state.published_algorithm ? `<p>Phương án đang công bố · <strong>${esc(state.published_algorithm.toUpperCase())}</strong></p>` : ''}
     ${proposal?.results ? comparison(proposal) : proposal ? tables(proposal) : '<p>So sánh sẽ xuất hiện sau khi chạy cả hai mô hình.</p>'}
@@ -285,6 +290,19 @@ function updatePreviewQuotas() {
     const previous = state.proposal.quotas.map(q => q.advisor_id).sort();
     publish.disabled = JSON.stringify(ids) !== JSON.stringify(previous);
   }
+}
+
+function renderDean() {
+  stopReplay();
+  content.innerHTML = deanView();
+  updatePreviewQuotas();
+  const player = $('semester-replay');
+  if (!player) return;
+  const {results, quotas} = state.proposal;
+  const names = new Map(Object.values(results).flatMap(run => run.assignments.map(row => [row.user_id, row.student_name])));
+  const advisors = new Map(quotas.map(row => [row.advisor_id, row.advisor_name]));
+  stopReplay = mountReplay(player, {runs: results, quotas, initial: state.published_algorithm,
+    studentName: id => names.get(id) ?? id, advisorName: id => advisors.get(id) ?? advisorName(id)});
 }
 
 function comparison(proposal) {
@@ -359,8 +377,8 @@ async function refresh() {
     rankings = recommended.value ?? [];
     rankingError = recommended.reason?.message ?? '';
     selected ??= new Set(state.proposal?.quotas.map(q => q.advisor_id) ?? catalog.map(a => a.advisor_id));
-    content.innerHTML = {student: studentView, faculty: facultyView, dean: deanView}[user.role]();
-    if (user.role === 'dean') updatePreviewQuotas();
+    if (user.role === 'dean') renderDean();
+    else content.innerHTML = (user.role === 'student' ? studentView : facultyView)();
     const assessment = content.querySelector('[data-action="assessment"]');
     if (assessment) updateTracks(assessment);
     $('fill-skill-question').hidden = !state.profile?.skills.some(s => s.status !== 'unassessed');
@@ -551,8 +569,7 @@ if (['faculty', 'dean'].includes(user?.role)) {
       state = latest;
       if (user.role === 'dean') {
         if (content.querySelector('input[type="file"]')?.files.length) { state = previous; return; }
-        content.innerHTML = deanView();
-        updatePreviewQuotas();
+        renderDean();
       } else {
         content.innerHTML = facultyView();
         if (latest.published && !previous.published) showStatus('Trưởng khoa đã công bố kết quả.');
@@ -565,3 +582,4 @@ if (['faculty', 'dean'].includes(user?.role)) {
     } catch { /* Keep the last loaded faculty view if polling fails. */ }
   }, 30000);
 }
+addEventListener('pagehide', () => stopReplay(), {once: true});

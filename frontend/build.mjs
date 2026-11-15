@@ -17,7 +17,7 @@ await mkdir("dist", { recursive: true });
 const files = [
   "index.html", "landing.html", "login.html", "dashboard.html", "rebuild.html",
   "portal.css", "portal.js", "campus-scene.js", "nested-research.js",
-  "rebuild-app.js", "student-cohorts.js", "thesis.html", "thesis.js", "assets",
+  "rebuild-app.js", "student-cohorts.js", "allocation-replay.js", "thesis.html", "thesis.js", "assets",
 ];
 await Promise.all(files.map((file) => cp(file, `dist/${file}`, { recursive: true })));
 await mkdir("dist/vendor", { recursive: true });

@@ -1,14 +1,14 @@
 import { confidenceLabel, requireSession } from "./portal.js";
 let confidenceThreshold = 70;
 import { balancedQuotas } from "./student-cohorts.js";
+import { mountReplay } from "./allocation-replay.js";
 
 const $ = (id) => document.getElementById(id);
 const escape = (value = "") => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const labels = { ppo: "PPO", dqn: "DQN", hungarian: "Hungarian · baseline", greedy: "Greedy", random: "Random" };
-const state = { bootstrap: null, base: "", token: "", selected: new Set(), cohort: null, file: null, comparison: null, recommendation: null, algorithm: "ppo", busy: false, step: 0, playing: false, revision: 0, quotaVerified: false };
-let timer;
+const state = { bootstrap: null, base: "", token: "", selected: new Set(), cohort: null, file: null, comparison: null, recommendation: null, algorithm: "ppo", busy: false, revision: 0, quotaVerified: false };
+let stop = () => {};
 let previewedWorkbook;
-let replayScene, loadingReplay, pageClosed;
 
 function nameStudent(id) { return state.cohort?.students?.find((s) => s.student_id === id)?.student_name || id; }
 function nameAdvisor(id) { return state.bootstrap?.advisors?.find((a) => a.advisor_id === id)?.advisor_name || id; }
@@ -76,7 +76,7 @@ function download(blob, filename) {
 function jsonDetails(value) { return `<pre>${escape(JSON.stringify(value ?? {}, null, 2))}</pre>`; }
 
 function clearResults() {
-  stop(); state.comparison = null; state.recommendation = null; state.step = 0;
+  stop(); state.comparison = null; state.recommendation = null;
   $("comparison-result").className = "empty-state"; $("comparison-result").textContent = "Chưa có phân bổ cho hồ sơ và danh sách giảng viên hiện tại.";
   $("allocation-panel").hidden = true; $("recommendation-result").className = "empty-state"; $("recommendation-result").textContent = "Chọn “Xem top-K phù hợp” để lấy khuyến nghị cho danh sách hiện tại."; renderReplay(); updateControls();
 }
@@ -195,7 +195,7 @@ async function compare() {
     const version = $("checkpoint-version").value;
     state.comparison = await api("/compare", { cohort_id: state.cohort.cohort_id, advisor_ids: selectedIds(), coordinator_confirmed: true, ...(version ? { checkpoint_version: version } : {}) });
     const entries = Object.entries(state.comparison.results || {}); const preferred = ["ppo", "dqn", "hungarian"].find((key) => state.comparison.results[key]?.trace?.length);
-    state.algorithm = preferred || entries[0]?.[0] || "hungarian"; state.step = 0;
+    state.algorithm = preferred || entries[0]?.[0] || "hungarian";
     $("comparison-result").className = "comparison-content";
     $("comparison-result").innerHTML = `<div class="comparison-cards">${entries.map(([id]) => {const r=state.comparison.results[id];return `<article class="comparison-model" data-model="${id}"><h3>${escape(labels[id] || id)}</h3><p>${id==='ppo'?'Học chính sách phân bổ':id==='dqn'?'Học giá trị từng lựa chọn':id==='hungarian'?'Tối ưu toàn cục':id==='greedy'?'Chọn cặp tốt nhất còn khả thi':'Lấy mẫu có seed'}</p><span class="metric">${number(r?.metrics?.mean_compatibility,3)}</span><p>Điểm phù hợp trung bình${r?.metrics?.scored_students !== undefined ? ` · ${number(r.metrics.scored_students,0)} SV có điểm` : ""}</p><meter min="0" max="1" value="${Number(r?.metrics?.mean_compatibility ?? 0)}" aria-label="Điểm tương thích trung bình" ${r?.metrics?.mean_compatibility == null ? "hidden" : ""}></meter><p>${r?.status==='feasible'?'Phân bổ hợp lệ':'Chưa có phân bổ hợp lệ'}</p></article>`;}).join('')}</div><table><caption>Kết quả từng thuật toán</caption><thead><tr><th>Thuật toán</th><th>Trạng thái</th><th class="number">Điểm mục tiêu</th><th class="number">Phù hợp trung bình</th><th class="number">Chênh tải chuẩn hóa</th><th class="number">Thời gian (giây)</th><th class="number">Phân bổ đủ</th><th class="number">Vi phạm quota</th></tr></thead><tbody>${entries.map(([id]) => { const r = state.comparison.results[id]; return `<tr><td><strong>${escape(labels[id] || id)}</strong></td><td>${escape(r.status === "feasible" ? "Hợp lệ" : r.status === "infeasible" ? "Không khả thi" : r.status)}${r.diagnostics || r.diagnostic ? `<details><summary>Chi tiết</summary>${jsonDetails(r.diagnostics || r.diagnostic)}</details>` : ""}</td><td class="number">${number(r.metrics?.objective, 3)}</td><td class="number">${number(r.metrics?.mean_compatibility, 3)}</td><td class="number">${number(r.metrics?.normalized_load_imbalance, 3)}</td><td class="number">${number(r.elapsed_seconds, 4)}</td><td class="number">${typeof r.metrics?.coverage === "number" ? `${number(r.metrics.coverage * 100)}%` : "—"}</td><td class="number">${number(r.metrics?.constraint_violations, 0)}</td></tr>`; }).join("")}</tbody></table>${warnings(state.comparison.warnings)}<p class="help">Phù hợp trung bình là điểm đặc trưng của các cặp đã phân bổ. Chênh tải chuẩn hóa là chênh lệch lớn nhất giữa tỷ lệ tải/quota của các giảng viên (thấp hơn là cân bằng hơn). Các chỉ số phục vụ so sánh cùng đầu vào, chưa phải độ chính xác hoặc kết quả hướng dẫn thực tế.</p>`;
     $("result-algorithm").innerHTML = entries.map(([key]) => `<option value="${escape(key)}" ${key === state.algorithm ? "selected" : ""}>${escape(labels[key] || key)}</option>`).join("");
@@ -236,37 +236,11 @@ function renderAssignments() {
   }).join("")}</tbody></table>` : `<p class="empty-state">Thuật toán chưa tạo được phân bổ hợp lệ. Xem chẩn đoán ở bảng so sánh.</p>`; updateControls();
 }
 
-function stop() { clearInterval(timer); state.playing = false; if ($("play")) $("play").textContent = "Phát"; }
 function renderReplay() {
-  const trace = currentResult()?.trace || []; state.step = Math.max(0, Math.min(state.step, trace.length));
-  $("step-count").textContent = `${state.step} / ${trace.length} bước`;
-  $("previous-step").disabled = state.step === 0; $("next-step").disabled = !trace.length || state.step >= trace.length;
-  $("play").disabled = !trace.length; $("reset-replay").disabled = !trace.length;
-  const decision = trace[state.step - 1];
-  const sceneRegistry = decision?.advisor_registry || trace[0]?.advisor_registry || [];
-  if (trace.length && !replayScene && !loadingReplay) {
-    loadingReplay = import("./campus-scene.js").then(({ createCampus }) => {
-      if (pageClosed) return;
-      replayScene = createCampus($("allocation-scene"), {replay:true});
-      $("replay-motion").hidden = !replayScene;
-      if (replayScene) $("replay-motion").textContent = replayScene.paused ? "Bật chuyển động 3D" : "Tạm dừng chuyển động 3D";
-      if (replayScene) renderReplay();
-    }).catch(() => { $("replay-motion").hidden = true; });
-  }
-  replayScene?.update(decision, sceneRegistry, sceneRegistry.map(nameAdvisor), state.step, trace[0]?.capacities || []);
-  $("scene-explanation").textContent = decision ? `Bước ${state.step}: ${nameStudent(decision.student_id)} được đề xuất cho ${nameAdvisor(decision.advisor_id)}. Các thanh bên dưới cho biết số chỗ đã dùng.` : "Nhân vật đội mũ là sinh viên; người cầm sách là giảng viên. Nhấn Phát để xem từng đề xuất thực.";
-  $("current-decision").className = decision ? "" : "empty-state";
-  $("current-decision").innerHTML = decision ? `<strong>${escape(nameStudent(decision.student_id))}</strong> → <strong>${escape(nameAdvisor(decision.advisor_id))}</strong><p>Có ${decision.pre_action_mask?.filter(Boolean).length ?? "—"} giảng viên còn đủ điều kiện ở bước này. Điểm phù hợp của cặp: ${score(decision.score_known ? decision.score : null)}.</p><details><summary>Điểm thành phần và đầu ra mô hình</summary>${jsonDetails({ reward: decision.reward_components, preference: decision.preference_known ? decision.preference : "Chưa biết", policy_output: decision.policy_output || { status: "Không có đầu ra policy/Q được cung cấp" } })}</details>` : trace.length ? "Bắt đầu phát để xem sinh viên, lựa chọn hợp lệ và tải giảng viên ở từng bước." : "Trace sẽ xuất hiện sau lần phân bổ đầu tiên.";
-  const registry = decision?.advisor_registry || trace[0]?.advisor_registry || []; const capacities = decision?.capacities || trace[0]?.capacities || []; const loads = decision?.loads_after || registry.map(() => 0);
-  $("load-chart").innerHTML = registry.map((id, i) => capacities[i] > 0 ? `<div class="load-row"><span>${escape(nameAdvisor(id))}</span><b>${loads[i] || 0}/${capacities[i]}</b><progress value="${loads[i] || 0}" max="${capacities[i]}" aria-label="Tải ${escape(nameAdvisor(id))}"></progress></div>` : "").join("");
-  $("trace-table").innerHTML = trace.length ? `<table><caption>Trace quyết định thực · ${escape(labels[state.algorithm] || state.algorithm)}</caption><thead><tr><th>Bước</th><th>Sinh viên</th><th>Giảng viên</th><th class="number">Điểm</th><th class="number">Reward</th><th>Trạng thái</th></tr></thead><tbody>${trace.map((r, i) => `<tr ${i + 1 === state.step ? 'aria-current="step"' : ""}><td>${i + 1}</td><td>${escape(nameStudent(r.student_id))}</td><td>${escape(nameAdvisor(r.advisor_id))}${r.assignment_mode === "quota_only" ? "<small>Ghép theo quota còn lại</small>" : ""}</td><td class="number">${score(r.score_known ? r.score : null)}</td><td class="number">${number(r.total_reward, 4)}</td><td>${i < state.step ? "Đã phát" : "Chưa phát"}</td></tr>`).join("")}</tbody></table>` : "";
-}
-function play() {
-  if (state.playing) { stop(); return; }
-  const trace = currentResult()?.trace || []; if (!trace.length) return;
-  if (state.step >= trace.length) state.step = 0;
-  state.playing = true; $("play").textContent = "Tạm dừng";
-  timer = setInterval(() => { state.step++; renderReplay(); if (state.step >= trace.length) stop(); }, 1000 / Number($("replay-speed").value));
+  stop();
+  stop = mountReplay($("allocation-player"), {
+    runs: {[state.algorithm]: currentResult()}, studentName: nameStudent, advisorName: nameAdvisor,
+  });
 }
 
 async function exportCsv() {
@@ -309,21 +283,12 @@ $("select-all").addEventListener("click", () => { state.selected = new Set(state
 $("clear-selection").addEventListener("click", () => { state.selected.clear(); selectionChanged(); });
 $("confirm-policy").addEventListener("change", updateControls);
 $("recommend").addEventListener("click", recommend); $("compare").addEventListener("click", compare);
-$("result-algorithm").addEventListener("change", () => { stop(); state.algorithm = $("result-algorithm").value; state.step = 0; renderAssignments(); renderReplay(); });
+$("result-algorithm").addEventListener("change", () => { stop(); state.algorithm = $("result-algorithm").value; renderAssignments(); renderReplay(); });
 $("student-comparison-id").addEventListener("change", renderStudentComparison);
 $("checkpoint-version").addEventListener("change", clearResults);
-$("previous-step").addEventListener("click", () => { stop(); state.step--; renderReplay(); });
-$("next-step").addEventListener("click", () => { stop(); state.step++; renderReplay(); });
-$("reset-replay").addEventListener("click", () => { stop(); state.step = 0; renderReplay(); });
-$("play").addEventListener("click", play); $("replay-speed").addEventListener("change", () => { if (state.playing) { stop(); play(); } });
 $("export-json").addEventListener("click", () => download(new Blob([JSON.stringify(state.comparison, null, 2)], { type: "application/json" }), "unimatch-comparison.json"));
 $("export-csv").addEventListener("click", exportCsv);
-const motionButton=$("replay-motion");
-motionButton.hidden = true;
-motionButton.addEventListener('click', () => {
-  if (replayScene) motionButton.textContent = replayScene.toggle() ? 'Bật chuyển động 3D' : 'Tạm dừng chuyển động 3D';
-});
-addEventListener('pagehide',()=>{pageClosed=true;stop();replayScene?.destroy();},{once:true});
+addEventListener("pagehide", () => stop(), {once: true});
 updateControls(); renderReplay();
 const user=await requireSession();
 if (user?.role === 'dean') {

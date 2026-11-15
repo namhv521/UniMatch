@@ -142,7 +142,34 @@ def compare_models(active, students, requests, selected):
                 'advisor_id': aid, 'advisor_name': advisors[j]['advisor_name'], 'submitted': student['submitted'],
                 'score': float(problem.scores[i, j]) if known[i, j] else None, 'accepted': uid in fixed})
         evidence = [row['score'] for row in assignments if row['score'] is not None]
+        trace = []
+        for decision in result['trace']:
+            uid = decision['student_id']
+            i = indexes[uid]
+            reasons = []
+            for j, aid in enumerate(ids):
+                if not problem.present[j]:
+                    reason = 'outside'
+                elif uid in fixed and fixed[uid] != aid:
+                    reason = 'fixed'
+                elif not problem.eligible[i, j]:
+                    reason = 'rejected'
+                elif decision['loads_before'][j] >= capacities[j]:
+                    reason = 'full'
+                elif not decision['pre_action_mask'][j]:
+                    reason = 'future'
+                else:
+                    reason = None
+                reasons.append(reason)
+            step = {key: decision[key] for key in ('student_id', 'advisor_id', 'loads_before', 'loads_after',
+                    'pre_action_mask', 'score', 'score_known', 'preference', 'preference_known', 'reward_components',
+                    'policy_output')}
+            trace.append({**step, 'fixed': uid in fixed, 'blocked_reasons': reasons,
+                          'candidate_scores': [float(value) if known[i, j] else None for j, value in enumerate(problem.scores[i])]})
+        if trace:
+            trace[0].update(advisor_registry=list(ids), capacities=capacities.tolist())
         results[name] = {'status': result['status'], 'assignments': assignments,
+                         'trace': trace,
                          'metrics': {**result['metrics'], 'mean_compatibility': float(np.mean(evidence)) if evidence else None,
                                      'scored_students': len(evidence)},
                          'elapsed_seconds': result['elapsed_seconds']}

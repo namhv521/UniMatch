@@ -15,6 +15,19 @@
 
 .thesis-workspace main { max-width: 1040px; margin: 0 auto; padding: 32px 5% 64px; }
 .thesis-heading { margin-bottom: 24px; }
+.allocation-player-controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+.allocation-player-controls label { display: grid; gap: 4px; flex: 1 1 155px; min-width: 0; font-size: .88rem; }
+.allocation-player-controls select { width: 100%; }
+.allocation-player-controls .allocation-speed { flex: 0 1 90px; }
+.allocation-player-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.allocation-player-buttons button { padding: 8px 12px; }
+.allocation-progress { margin: 16px 0; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; color: var(--muted); font-size: .85rem; }
+.allocation-progress progress { width: 100%; accent-color: var(--blue); }
+.allocation-chosen { font-size: 1.05rem; }
+.allocation-facts { display: flex; gap: 12px 24px; flex-wrap: wrap; padding: 12px 16px; background: var(--paper); border-radius: 10px; }
+.allocation-facts dt { font-size: .8rem; color: var(--muted); }
+.allocation-facts dd { margin: 3px 0 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.allocation-selected > * { background: #e9f4fc; }
 .thesis-workspace:has(.dean-layout) main { max-width: 1400px; }
 .dean-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 260px); gap: 20px; align-items: start; }
 .dean-main { min-width: 0; }

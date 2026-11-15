@@ -67,6 +67,7 @@ Luồng chọn định hướng, công cụ và nguyện vọng tham khảo [Kh�
 - `proposal` dùng chung registry hành động, taxonomy, encoder, quota và ràng buộc cho hai checkpoint. Nếu release có catalog, cả hai dùng V3. Ghép đã nhận là ràng buộc cố định. Hồ sơ chỉ có CSV vẫn tham gia. Hồ sơ thiếu dữ liệu chuyên môn có điểm E4 rỗng khi hiển thị.
 - `publish` nhận `id` và `algorithm` là `ppo` hoặc `dqn`. Giảng viên chỉ thấy thông tin liên hệ của sinh viên trong danh sách được phân cho mình hoặc đã chọn mình theo luồng nguyện vọng. Thu hồi bỏ bản công bố và giữ bản nháp phục vụ chỉnh sửa, chạy lại hoặc công bố lại.
 - Ngưỡng so số mô hình có điểm E4 đạt ngưỡng trên từng sinh viên. Nếu PPO và DQN chọn giảng viên khác nhau, giao diện hiển thị cả hai cặp và đánh dấu khác biệt. Bảng chỉ số dùng điểm E4 đã biết khi tính trung bình.
+- Trình phát lại dùng quyết định của lần chạy đã lưu. Trưởng khoa có thể xem chỉ tiêu ban đầu, chuyển giữa PPO và DQN, chọn một sinh viên hoặc phát theo thứ tự, rồi xem tổng kết. Mỗi bước hiển thị chỗ còn lại trước và sau, cặp đã được nhận, lựa chọn hợp lệ và lý do bị loại. Điểm E4, xác suất chọn của PPO và giá trị Q của DQN hiển thị riêng. Phương án cũ chưa lưu dữ liệu từng bước vẫn xem được bảng kết quả.
 
 ### Công thức chỉ tiêu
 

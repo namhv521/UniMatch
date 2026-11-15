@@ -71,12 +71,8 @@
       <div id="recommendation-result" class="empty-state">Chọn “Xem top-K phù hợp” sau khi kiểm tra hồ sơ.</div>
     </section>
     <section id="simulation" class="work-section" aria-labelledby="simulation-title">
-      <header class="section-heading"><div><h2 id="simulation-title">Mô phỏng từng quyết định</h2><p>Mỗi nhân vật sinh viên đến gặp giảng viên được mô hình đề xuất.</p></div><output id="step-count">0 / 0 bước</output></header>
-      <div class="replay-controls"><button id="previous-step" type="button" class="secondary" disabled>Bước trước</button><button id="play" type="button" class="primary" disabled>Phát</button><button id="next-step" type="button" class="secondary" disabled>Bước tiếp</button><label>Tốc độ<select id="replay-speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label><button id="reset-replay" type="button" class="secondary" disabled>Về đầu</button></div>
-      <div class="simulation-stage"><canvas id="allocation-scene" aria-label="Mô phỏng phân bổ sinh viên đến giảng viên"></canvas><p id="scene-explanation">Chạy so sánh rồi nhấn Phát. Nhân vật đội mũ là sinh viên; người cầm sách là giảng viên.</p><button id="replay-motion" class="scene-toggle" type="button">Tạm dừng chuyển động 3D</button></div>
-      <div id="current-decision" class="empty-state" aria-live="polite">Trace sẽ xuất hiện sau lần phân bổ đầu tiên.</div>
-      <div id="load-chart" class="load-chart"></div>
-      <div id="trace-table" class="table-scroll"></div>
+      <h2 id="simulation-title">Phát lại quá trình phân công</h2>
+      <div id="allocation-player"></div>
     </section>
     <footer class="workspace-footer">UniMatch · Đề xuất cần được người phụ trách xem xét trước khi xác nhận phân công.</footer>
   </main>
