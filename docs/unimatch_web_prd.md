@@ -1,6 +1,6 @@
 # PRD UniMatch Web
 
-Phiên bản 1.0 · 15/11/2026
+Phiên bản 1.1 · 15/11/2026
 
 Đặc tả kỹ thuật đi kèm tại [UniMatch Web Spec](unimatch_web_spec.md).
 
@@ -19,9 +19,9 @@ UniMatch hỗ trợ một đợt đăng ký và phân công hướng dẫn khóa
 ## Luồng sinh viên
 
 1. Đăng nhập, vào **Khóa luận**, chọn mức tự đánh giá và hoàn thành bài trắc nghiệm.
-2. Lưu bài làm để ghi danh vào kỳ. Xem số câu đúng và phân loại từng nhóm kỹ năng. Phiên bản đầu đo sơ bộ bốn nhóm gồm học máy, backend, frontend và xử lý ngôn ngữ tự nhiên.
+2. Lưu bài làm để ghi danh vào kỳ. Xem số câu đúng và phân loại từng nhóm kỹ năng. Chọn trong 22 vai trò, mỗi vai trò có 5 câu và danh sách công cụ đã dùng. Hồ sơ ghi nhận mức rõ ràng của ý tưởng khóa luận.
 3. Xem tối đa năm giảng viên theo điểm phù hợp. Có thể dùng nút soạn câu hỏi từ hồ sơ kỹ năng để hỏi chatbot về các kỹ năng đã ghi nhận.
-4. Chọn một giảng viên từ danh mục. Đổi hoặc rút nguyện vọng khi còn chờ. Nếu bị từ chối, có thể chọn giảng viên khác. Khi được nhận, chỗ hướng dẫn được giữ cho cặp đó.
+4. Chọn từ một đến ba giảng viên theo thứ tự ưu tiên. Mô tả đề tài là tùy chọn, có thể bổ sung sau và hiển thị cho giảng viên đang xem xét. Khi một giảng viên nhận, các yêu cầu còn chờ được rút.
 5. Xem giảng viên được phân công sau khi trưởng khoa công bố.
 
 ## Luồng giảng viên
@@ -44,14 +44,14 @@ UniMatch hỗ trợ một đợt đăng ký và phân công hướng dẫn khóa
 - Một tài khoản sinh viên lưu nhiều lần vẫn chỉ được tính một đăng ký trong một kỳ.
 - Chatbot trả lời về chuyên môn giảng viên qua nguồn đã duyệt. Sinh viên có thể kiểm tra câu hỏi trước khi gửi.
 - Giảng viên chỉ xem và quyết định với nguyện vọng gửi đến mã giảng viên gắn với tài khoản mình.
-- Mỗi sinh viên có tối đa một nguyện vọng đang chờ hoặc đã được nhận. Cặp đã nhận xuất hiện đúng trong kết quả. Cặp bị từ chối bị loại khỏi phân công.
+- Mỗi sinh viên có tối đa ba nguyện vọng đang chờ và tối đa một cặp được nhận. Cặp đã nhận xuất hiện đúng trong kết quả. Cặp bị từ chối bị loại khỏi phân công.
 - Phương án khả thi phân công đủ mỗi sinh viên một lần và không vượt chỉ tiêu. Nếu ràng buộc xung đột, giao diện hiển thị nguyên nhân nghiệp vụ để trưởng khoa điều chỉnh danh sách.
 - Màu đi kèm nhãn văn bản. Người dùng có thể thực hiện khảo sát, duyệt nguyện vọng và đọc bảng trên điện thoại hoặc bằng bàn phím.
 - Kết quả công bố chỉ hiển thị cho người liên quan. Thay đổi hồ sơ hoặc nguyện vọng trước công bố buộc tạo lại phương án.
 
-## Phạm vi phiên bản 1.0
+## Phạm vi phiên bản hiện tại
 
 - Một kỳ đang phục vụ, cấu hình ở máy chủ. Dữ liệu từng kỳ được lưu riêng.
-- Một nguyện vọng tại một thời điểm. Kết quả trắc nghiệm là chỉ báo nhập môn và hồ sơ kỹ năng khai báo, chưa phải chứng chỉ.
+- Kết quả trắc nghiệm là chỉ báo nhập môn và hồ sơ kỹ năng khai báo, chưa phải chứng chỉ.
 - Ngưỡng dựa trên điểm tương thích của cặp. Khoa có thể sửa ngưỡng cho kỳ trước khi công bố. Độ chính xác thực tế cần dữ liệu xác nhận sau kỳ.
 - Phiên bản này dùng đăng nhập OAuth hiện có. Các quyết định học vụ như điều kiện làm khóa luận và xác minh mã sinh viên cần quy trình riêng của khoa.

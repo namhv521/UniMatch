@@ -6,6 +6,55 @@ from fastapi.testclient import TestClient
 from test_phase7_service import service
 
 
+def test_role_assessment_and_ranked_preferences(service, tmp_path, monkeypatch):
+    from backend.app.rebuild_api import create_app
+    from backend.app.thesis_assessment import ASSESSMENT_VERSION
+    from backend.app.thesis_tracks import TRACKS
+    service.advisors.append({'advisor_id': 'c', 'advisor_name': 'Technical C'})
+    service.advisor_ids += ('c',)
+    monkeypatch.setenv('UNIMATCH_AUTH_DB', str(tmp_path / 'portal.sqlite3'))
+    monkeypatch.setenv('UNIMATCH_THESIS_SEMESTER', 'fixture-ranked')
+    monkeypatch.setenv('UNIMATCH_ROLE_ROSTER', json.dumps({
+        'github:a': {'role': 'faculty', 'advisor_id': 'a'},
+        'github:b': {'role': 'faculty', 'advisor_id': 'b'},
+        'github:c': {'role': 'faculty', 'advisor_id': 'c'},
+    }))
+    app = create_app(service=service, frontend_dir=tmp_path)
+
+    def account(subject):
+        cookie = app.state.portal_store.create_session('github', subject, subject)
+        return TestClient(app, cookies={'unimatch_session': cookie})
+
+    student, a, b, c = map(account, ['student', 'a', 'b', 'c'])
+    base = '/api/thesis'
+    tracks = student.get(base).json()['assessment']
+    assert len(tracks) == 22
+    assert all(len(track['questions']) == 5 and set(track['questions'][0]) == {'prompt', 'options'} for track in tracks)
+    key = 'product_owner'
+    assessment = {'version': ASSESSMENT_VERSION, 'roles': [key], 'orientation': 'idea',
+                  'tools': {key: ['Jira']}, 'survey': {key: 4},
+                  'answers': {key: [row[2] for row in TRACKS[key]['questions']]}}
+    assert student.post(base + '/assessment', json={**assessment, 'roles': [key, key]}).status_code == 422
+    assert student.post(base + '/assessment', json=assessment).status_code == 200
+    assert student.get(base).json()['profile']['skills'][0]['status'] == 'strong'
+    assert student.get(base + '/recommendations').status_code == 200
+    assert student.post(base + '/choice', json={'advisor_ids': ['a', 'a']}).status_code == 422
+    assert student.post(base + '/choice', json={'advisor_ids': ['c', 'a', 'b']}).status_code == 200
+    assert student.get(base).json()['topic_description'] == ''
+    assert student.post(base + '/topic', json={'topic_description': 'Topic draft'}).status_code == 200
+    applicant = c.get(base).json()['requests'][0]
+    assert applicant['rank'] == 1 and applicant['topic_description'] == 'Topic draft'
+    assert a.get(base).json()['requests'][0]['rank'] == 2
+    assert b.get(base).json()['requests'][0]['rank'] == 3
+    decision = {'user_id': applicant['user_id'], 'decision': 'accepted'}
+    assert a.post(base + '/decision', json=decision).status_code == 200
+    assert b.post(base + '/decision', json=decision).status_code == 409
+    assert b.get(base).json()['requests'] == []
+    assert c.get(base).json()['requests'] == []
+    assert student.post(base + '/topic', json={'topic_description': 'Topic refined'}).status_code == 200
+    assert a.get(base).json()['requests'][0]['topic_description'] == 'Topic refined'
+
+
 def test_email_activation_and_public_registration(tmp_path, monkeypatch):
     from backend.app.email_auth import password_hash
     from backend.app.portal import hashed, install_portal

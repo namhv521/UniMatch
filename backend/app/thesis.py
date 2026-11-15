@@ -80,7 +80,7 @@ def allocation(active, students, requests, selected):
         if r['status'] == 'rejected':
             eligible[i, j] = False
         elif r['status'] == 'pending':
-            preferences[i, j] = 1
+            preferences[i, j] = (4 - r['rank']) / 3
     problem = AllocationProblem(scores=np.clip(scores, 0, 1), available=np.ones_like(known),
         student_ids=student_ids, advisor_ids=ids, capacities=capacities, eligible=eligible,
         present=np.array([a in selected for a in ids]), fixed_assignments=fixed,
@@ -131,15 +131,29 @@ def install_thesis(router, app, store, authenticated, check_origin):
             'WHERE s.semester=? ORDER BY s.user_id', (semester,)).fetchall()]
 
     def load_requests(db, *, user_id=None, advisor_id=None):
-        query = 'SELECT user_id,advisor_id,status FROM thesis_requests WHERE semester=?'
+        query = ('SELECT r.user_id,r.advisor_id,r.status,p.advisor_ids,p.topic_description FROM thesis_requests r '
+                 'LEFT JOIN thesis_preferences p ON p.semester=r.semester AND p.user_id=r.user_id WHERE r.semester=?')
         values = [semester]
         if user_id is not None:
-            query += ' AND user_id=?'
+            query += ' AND r.user_id=?'
             values.append(user_id)
         if advisor_id is not None:
-            query += ' AND advisor_id=?'
+            query += ' AND r.advisor_id=?'
             values.append(advisor_id)
-        return [dict(row) for row in db.execute(query + ' ORDER BY advisor_id,user_id', values).fetchall()]
+        requests = []
+        for record in db.execute(query + ' ORDER BY r.advisor_id,r.user_id', values).fetchall():
+            row = dict(record)
+            ids = json.loads(row.pop('advisor_ids') or 'null')
+            if ids is None:
+                row['rank'] = 1
+            else:
+                row['rank'] = ids.index(row['advisor_id']) + 1 if row['advisor_id'] in ids else None
+            requests.append(row)
+        return requests
+
+    def load_preference(db, user_id):
+        return db.execute('SELECT advisor_ids,topic_description FROM thesis_preferences WHERE semester=? AND user_id=?',
+                          (semester, user_id)).fetchone()
 
     def active_service():
         return app.state.rebuild_get_service()
@@ -153,9 +167,11 @@ def install_thesis(router, app, store, authenticated, check_origin):
             if user['role'] == 'student':
                 row = db.execute('SELECT profile FROM thesis_students WHERE semester=? AND user_id=?',
                                  (semester, user['id'])).fetchone()
+                preference = load_preference(db, user['id'])
                 return {**result, 'assessment_version': ASSESSMENT_VERSION, 'assessment': public_assessment(),
                         'profile': json.loads(row['profile']) if row else None,
                         'requests': load_requests(db, user_id=user['id']),
+                        'topic_description': preference['topic_description'] if preference else '',
                         'assignment': next((r for r in published['assignments'] if r['user_id'] == user['id']), None)
                         if published else None}
             if user['role'] == 'faculty':
@@ -165,11 +181,13 @@ def install_thesis(router, app, store, authenticated, check_origin):
                 applicants = {row['user_id']: row for row in db.execute(
                     'SELECT s.user_id,u.name,s.profile FROM thesis_students s JOIN users u ON u.id=s.user_id '
                     'JOIN thesis_requests r ON r.semester=s.semester AND r.user_id=s.user_id '
-                    'WHERE s.semester=? AND r.advisor_id=? AND r.status<>?', (semester, user['advisor_id'], 'withdrawn')
+                    "WHERE s.semester=? AND r.advisor_id=? AND r.status IN ('pending','accepted','rejected')",
+                    (semester, user['advisor_id'])
                 ).fetchall()}
                 count = db.execute('SELECT count(*) AS total FROM thesis_students WHERE semester=?', (semester,)).fetchone()
                 return {**result, 'student_count': count['total'],
-                        'requests': [{**r, 'name': applicants[r['user_id']]['name'],
+                        'requests': [{**r, 'topic_description': r['topic_description'] if r['status'] != 'rejected' else None,
+                                      'name': applicants[r['user_id']]['name'],
                                       'skills': json.loads(applicants[r['user_id']]['profile'])['skills']}
                                      for r in requests if r['user_id'] in applicants],
                         'assignments': [r for r in published['assignments'] if r['advisor_id'] == user['advisor_id']]
@@ -201,13 +219,13 @@ def install_thesis(router, app, store, authenticated, check_origin):
         return [{**advisors[j], 'score': float(scores[0, j])} for j in indices[:5]]
 
     def mutate(action, request, payload):
-        role = {'assessment': 'student', 'choice': 'student', 'decision': 'faculty',
+        role = {'assessment': 'student', 'choice': 'student', 'topic': 'student', 'decision': 'faculty',
                 'threshold': 'dean', 'proposal': 'dean', 'publish': 'dean'}[action]
         user = require(request, role)
-        if action == 'choice' and 'advisor_id' not in payload:
+        if action == 'choice' and not ('advisor_ids' in payload or 'advisor_id' in payload):
             raise HTTPException(422, 'invalid_advisor_selection')
-        advisor_id = payload.get('advisor_id')
-        active = active_service() if action == 'proposal' or action == 'choice' and advisor_id is not None else None
+        advisor_ids = payload.get('advisor_ids', [] if payload.get('advisor_id') is None else [payload['advisor_id']])
+        active = active_service() if action == 'proposal' or action == 'choice' and advisor_ids else None
         with term(write=True) as (db, state):
             if action == 'assessment':
                 profile = assess(payload)
@@ -215,7 +233,11 @@ def install_thesis(router, app, store, authenticated, check_origin):
                            'ON CONFLICT(semester,user_id) DO UPDATE SET profile=excluded.profile',
                            (semester, user['id'], json.dumps(profile, ensure_ascii=False)))
             elif action == 'choice':
-                choice(db, user['id'], advisor_id, active)
+                choice(db, user['id'], advisor_ids, active, payload)
+            elif action == 'topic':
+                if not any(r['status'] in ('pending', 'accepted') for r in load_requests(db, user_id=user['id'])):
+                    raise HTTPException(409, 'pending_request_required')
+                save_topic(db, user['id'], payload)
             elif action == 'decision':
                 if not user['advisor_id']:
                     raise HTTPException(409, 'advisor_account_unassigned')
@@ -228,6 +250,9 @@ def install_thesis(router, app, store, authenticated, check_origin):
                                  (decision, semester, student, user['advisor_id'], 'pending')).fetchone()
                 if row is None:
                     raise HTTPException(409, 'pending_request_required')
+                if decision == 'accepted':
+                    db.execute("UPDATE thesis_requests SET status='withdrawn' WHERE semester=? AND user_id=? AND status='pending'",
+                               (semester, student))
             elif action == 'threshold':
                 threshold = payload.get('threshold')
                 if type(threshold) is not int or not 0 <= threshold <= 100:
@@ -256,26 +281,46 @@ def install_thesis(router, app, store, authenticated, check_origin):
             db.execute('UPDATE thesis_semesters SET proposal=NULL WHERE semester=?', (semester,))
         return {'ok': True}
 
-    def choice(db, student, advisor_id, active):
+    def topic_text(payload, previous=''):
+        text = payload.get('topic_description', previous)
+        if not isinstance(text, str) or len(text) > 2000 or '\x00' in text:
+            raise HTTPException(422, 'invalid_topic_description')
+        return text.strip()
+
+    def save_topic(db, student, payload):
+        preference = load_preference(db, student)
+        ids = json.loads(preference['advisor_ids']) if preference else [
+            r['advisor_id'] for r in load_requests(db, user_id=student) if r['status'] in ('pending', 'accepted')]
+        upsert_preference(db, student, ids, topic_text(payload))
+
+    def upsert_preference(db, student, ids, topic):
+        db.execute('INSERT INTO thesis_preferences(semester,user_id,advisor_ids,topic_description) VALUES (?,?,?,?) '
+                   'ON CONFLICT(semester,user_id) DO UPDATE SET advisor_ids=excluded.advisor_ids, '
+                   'topic_description=excluded.topic_description', (semester, student, json.dumps(ids), topic))
+
+    def choice(db, student, advisor_ids, active, payload):
         args = (semester, student)
+        if (not isinstance(advisor_ids, list) or len(advisor_ids) > 3
+                or any(not isinstance(a, str) or a not in active.advisor_ids for a in advisor_ids)
+                or len(set(advisor_ids)) != len(advisor_ids)):
+            raise HTTPException(422, 'invalid_advisor_selection')
         if not db.execute('SELECT 1 FROM thesis_students WHERE semester=? AND user_id=?', args).fetchone():
             raise HTTPException(409, 'assessment_required')
         requests = load_requests(db, user_id=student)
         if any(r['status'] == 'accepted' for r in requests):
             raise HTTPException(409, 'accepted_request_locked')
-        if advisor_id is not None:
-            if not isinstance(advisor_id, str) or advisor_id not in active.advisor_ids:
-                raise HTTPException(422, 'invalid_advisor_selection')
-            if any(r['advisor_id'] == advisor_id and r['status'] == 'rejected' for r in requests):
-                raise HTTPException(409, 'request_already_rejected')
+        if any(r['advisor_id'] in advisor_ids and r['status'] == 'rejected' for r in requests):
+            raise HTTPException(409, 'request_already_rejected')
         db.execute("UPDATE thesis_requests SET status='withdrawn' WHERE semester=? AND user_id=? AND status='pending'", args)
-        if advisor_id is not None:
+        for advisor_id in advisor_ids:
             db.execute("INSERT INTO thesis_requests VALUES (?,?,?,'pending') "
                        "ON CONFLICT(semester,user_id,advisor_id) DO UPDATE SET status='pending'", (*args, advisor_id))
+        previous = load_preference(db, student)
+        upsert_preference(db, student, advisor_ids, topic_text(payload, previous['topic_description'] if previous else ''))
 
     @router.post('/api/thesis/{action}')
     async def change(action: str, request: Request):
-        if action not in {'assessment', 'choice', 'decision', 'threshold', 'proposal', 'publish'}:
+        if action not in {'assessment', 'choice', 'topic', 'decision', 'threshold', 'proposal', 'publish'}:
             raise HTTPException(404, 'unknown_thesis_action')
         check_origin(request)
         payload = await app.state.rebuild_read_body(request)

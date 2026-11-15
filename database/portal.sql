@@ -46,5 +46,12 @@ CREATE TABLE IF NOT EXISTS thesis_requests (
     PRIMARY KEY (semester, user_id, advisor_id),
     FOREIGN KEY (semester, user_id) REFERENCES thesis_students(semester, user_id)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS thesis_one_active_request
-    ON thesis_requests(semester, user_id) WHERE status IN ('pending','accepted');
+CREATE UNIQUE INDEX IF NOT EXISTS thesis_one_accepted_request
+    ON thesis_requests(semester, user_id) WHERE status='accepted';
+DROP INDEX IF EXISTS thesis_one_active_request;
+CREATE TABLE IF NOT EXISTS thesis_preferences (
+    semester TEXT NOT NULL, user_id TEXT NOT NULL,
+    advisor_ids TEXT NOT NULL, topic_description TEXT NOT NULL,
+    PRIMARY KEY (semester, user_id),
+    FOREIGN KEY (semester, user_id) REFERENCES thesis_students(semester, user_id)
+);
