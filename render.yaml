@@ -18,6 +18,8 @@ services:
         sync: false
       - key: UNIMATCH_THESIS_SEMESTER
         sync: false
+      - key: UNIMATCH_EMAIL_ACCOUNT_SEED
+        sync: false
       - key: UNIMATCH_MODEL_BUNDLE
         sync: false
       - key: UNIMATCH_MODEL_BUNDLE_SHA256

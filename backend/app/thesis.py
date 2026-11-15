@@ -159,6 +159,8 @@ def install_thesis(router, app, store, authenticated, check_origin):
                         'assignment': next((r for r in published['assignments'] if r['user_id'] == user['id']), None)
                         if published else None}
             if user['role'] == 'faculty':
+                if not user['advisor_id']:
+                    raise HTTPException(409, 'advisor_account_unassigned')
                 requests = load_requests(db, advisor_id=user['advisor_id'])
                 applicants = {row['user_id']: row for row in db.execute(
                     'SELECT s.user_id,u.name,s.profile FROM thesis_students s JOIN users u ON u.id=s.user_id '
@@ -215,6 +217,8 @@ def install_thesis(router, app, store, authenticated, check_origin):
             elif action == 'choice':
                 choice(db, user['id'], advisor_id, active)
             elif action == 'decision':
+                if not user['advisor_id']:
+                    raise HTTPException(409, 'advisor_account_unassigned')
                 decision = payload.get('decision')
                 student = payload.get('user_id')
                 if decision not in ('accepted', 'rejected') or not isinstance(student, str) or not re.fullmatch('[0-9a-f]{64}', student):

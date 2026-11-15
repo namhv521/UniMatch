@@ -6,6 +6,41 @@ from fastapi.testclient import TestClient
 from test_phase7_service import service
 
 
+def test_email_activation_and_public_registration(tmp_path, monkeypatch):
+    from backend.app.email_auth import password_hash
+    from backend.app.portal import hashed, install_portal
+
+    code = 'temporary-fixture-activation'
+    temporary_password = 'fixture'
+    new_password = 'new-fixture-password'
+    seed = [{'email': 'dean@example.test', 'name': 'Dean', 'role': 'dean',
+             'password_hash': password_hash(temporary_password), 'activation_hash': hashed(code)}]
+    monkeypatch.setenv('UNIMATCH_AUTH_DB', str(tmp_path / 'portal.sqlite3'))
+    monkeypatch.setenv('UNIMATCH_PUBLIC_ORIGIN', 'http://testserver')
+    monkeypatch.setenv('UNIMATCH_EMAIL_ACCOUNT_SEED', json.dumps(seed))
+    app = FastAPI()
+    install_portal(app)
+    client = TestClient(app)
+    base = '/api/auth/email/'
+    credentials = {'email': 'DEAN@example.test', 'password': temporary_password}
+    assert client.post(base + 'login', json=credentials).json()['detail'] == 'activation_required'
+    assert client.get('/api/auth/me').status_code == 401
+    payload = {**credentials, 'activation_code': code, 'new_password': new_password}
+    assert client.post(base + 'activate', json={**payload, 'activation_code': 'wrong'}).status_code == 401
+    assert client.post(base + 'activate', json=payload).status_code == 200
+    assert client.get('/api/auth/me').json()['role'] == 'dean'
+    assert client.post('/api/auth/logout').status_code == 200
+    assert client.post(base + 'login', json=credentials).status_code == 401
+    install_portal(FastAPI())
+    assert client.post(base + 'login', json={**credentials, 'password': new_password}).status_code == 200
+    public = TestClient(app)
+    student = {'email': 'student@example.test', 'password': new_password, 'name': 'Student', 'role': 'dean'}
+    assert public.post(base + 'register', json=student, headers={'Origin': 'https://another.test'}).status_code == 403
+    assert public.post(base + 'register', json=student).status_code == 200
+    assert public.get('/api/auth/me').json()['role'] == 'student'
+    assert public.post(base + 'register', json={**student, 'email': credentials['email']}).status_code == 409
+
+
 def test_unconfigured_production_keeps_existing_coordinator_access(tmp_path, monkeypatch):
     from backend.app.portal import install_portal
 

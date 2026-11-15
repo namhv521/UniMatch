@@ -6,6 +6,12 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), expires DOUBLE PRECISION NOT NULL
 );
+CREATE TABLE IF NOT EXISTS email_accounts (
+    email TEXT PRIMARY KEY, user_id TEXT NOT NULL UNIQUE REFERENCES users(id),
+    password_hash TEXT NOT NULL, activation_hash TEXT,
+    role TEXT NOT NULL CHECK (role IN ('student','faculty','dean')),
+    advisor_id TEXT, advisor_semester TEXT
+);
 CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires);
 CREATE TABLE IF NOT EXISTS pending (
     state TEXT PRIMARY KEY, provider TEXT NOT NULL, verifier TEXT NOT NULL, expires DOUBLE PRECISION NOT NULL

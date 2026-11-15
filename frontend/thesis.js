@@ -8,6 +8,7 @@ const skillNames = {strong: 'Điểm mạnh', demonstrated: 'Có tín hiệu t�
 const levels = ['Chưa từng làm', 'Đã tìm hiểu', 'Làm được có hướng dẫn', 'Làm được độc lập'];
 const errors = {
   semester_not_configured: 'Chưa mở kỳ đăng ký. Liên hệ khoa để biết lịch mở kỳ.',
+  advisor_account_unassigned: 'Tài khoản giảng viên chưa được gán danh mục cho kỳ này. Liên hệ khoa để kiểm tra.',
   semester_published: 'Kỳ này đã công bố kết quả. Tải lại trang để xem.',
   verified_artifacts_not_ready: 'Chưa tải được danh mục giảng viên. Vui lòng thử lại.',
   verified_advisor_knowledge_not_ready: 'Trợ lý chưa tải được nguồn giảng viên. Vui lòng thử lại.',
@@ -158,7 +159,7 @@ async function refresh() {
   content.setAttribute('aria-busy', 'true');
   try {
     state = await api();
-    $('thesis-period').textContent = `Kỳ ${state.semester}${state.published ? ' · Đã công bố' : ''}`;
+    $('thesis-period').textContent = `${state.semester.startsWith('demo-') ? 'Kỳ thử nghiệm ' : 'Kỳ '}${state.semester}${state.published ? ' · Đã công bố' : ''}`;
     const load = [
       user.role === 'faculty' ? Promise.resolve([]) : api('/catalog'),
       user.role === 'student' && state.profile ? api('/recommendations') : Promise.resolve([]),

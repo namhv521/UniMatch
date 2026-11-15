@@ -14,6 +14,8 @@ Yêu cầu sản phẩm tại [UniMatch Web PRD](unimatch_web_prd.md).
 ## Xác thực và cấu hình
 
 - Cookie OAuth hiện hữu xác thực người dùng. Vai trò được gán từ cặp `provider:subject` trên máy chủ. `subject` là định danh bất biến lưu ở cột `users.subject`, lấy từ bản ghi đã được quản trị viên đối chiếu.
+- Đăng ký email tại `login.html?mode=register` tạo tài khoản sinh viên với mật khẩu tối thiểu 12 ký tự. Email đăng ký chưa được xác minh. Tài khoản được cấp qua `UNIMATCH_EMAIL_ACCOUNT_SEED` phải cung cấp mã kích hoạt và đổi mật khẩu trước khi nhận phiên. Cấu hình seed lưu hash, chỉ thêm tài khoản mới và giữ nguyên mật khẩu đã đổi khi deploy lại.
+- Ba tài khoản kiểm thử sử dụng kỳ `demo-2026`. Quyền trưởng khoa và liên kết hồ sơ giảng viên của hai tài khoản demo chỉ có hiệu lực trong kỳ thử nghiệm đã cấu hình.
 - Biến `UNIMATCH_ROLE_ROSTER` nhận JSON. Mỗi tài khoản giảng viên cần mã `advisor_id` chính xác trong danh mục mô hình, mỗi mã được gắn tối đa một tài khoản. Tài khoản ngoài danh sách được cấp quyền sinh viên. Cấu hình các tài khoản trưởng khoa hiện có trước khi khởi động phiên bản này.
 
 ```json

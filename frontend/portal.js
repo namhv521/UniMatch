@@ -31,21 +31,84 @@ async function login() {
   let config;
   const buttons = [...document.querySelectorAll('[data-provider]')];
   function availability() { buttons.forEach(button => { button.disabled = !config?.providers[button.dataset.provider]; }); }
+  const form = $('email-auth-form');
+  const submit = $('email-auth-submit');
+  const activate = $('email-activate');
+  const authStatus = $('auth-status');
+  let mode = 'login';
+
+  function setMode(next) {
+    mode = next;
+    const register = mode === 'register';
+    const activating = mode === 'activate';
+    $('email-name-field').hidden = !register;
+    form.elements.name.required = register;
+    $('activate-fields').hidden = !activating;
+    form.elements.activation_code.required = activating;
+    form.elements.new_password.required = activating;
+    form.elements.password.minLength = register ? 12 : 1;
+    form.elements.password.autocomplete = register ? 'new-password' : 'current-password';
+    submit.textContent = register ? 'Tạo tài khoản sinh viên' : activating ? 'Đổi mật khẩu và đăng nhập' : 'Đăng nhập';
+    activate.hidden = register;
+    activate.textContent = activating ? 'Quay lại đăng nhập' : 'Kích hoạt tài khoản được cấp';
+    authStatus.textContent = '';
+  }
+
+  activate.addEventListener('click', () => {
+    setMode(mode === 'activate' ? 'login' : 'activate');
+    if (mode === 'activate') form.elements.activation_code.focus();
+  });
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const {email, password, name, activation_code, new_password} = Object.fromEntries(new FormData(form));
+    const body = {email, password, ...(mode === 'register' && {name}), ...(mode === 'activate' && {activation_code, new_password})};
+    const messages = {
+      invalid_email: 'Kiểm tra lại địa chỉ email.',
+      invalid_password: 'Mật khẩu mới cần có ít nhất 12 ký tự.',
+      invalid_name: 'Nhập họ và tên của bạn.',
+      email_unavailable: 'Email đã có tài khoản. Hãy chuyển sang đăng nhập.',
+      invalid_credentials: 'Email hoặc mật khẩu chưa đúng.',
+      invalid_activation: 'Mã kích hoạt chưa đúng.',
+      activation_used: 'Tài khoản đã kích hoạt. Hãy đăng nhập bằng mật khẩu mới.',
+      email_auth_rate_limited: 'Có quá nhiều lần thử. Vui lòng đợi một phút.',
+    };
+    submit.disabled = activate.disabled = true;
+    authStatus.textContent = 'Đang xác thực…';
+    try {
+      const response = await fetch('/api/auth/email/' + mode, {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+      });
+      const result = await response.json();
+      if (response.ok) { location.replace('./thesis.html'); return; }
+      if (result.detail === 'activation_required') {
+        setMode('activate');
+        authStatus.textContent = 'Nhập mã kích hoạt được cấp và chọn mật khẩu mới.';
+        form.elements.activation_code.focus();
+      } else authStatus.textContent = messages[result.detail] ?? 'Chưa xử lý được yêu cầu. Vui lòng thử lại.';
+    } catch {
+      authStatus.textContent = 'Không kết nối được dịch vụ. Vui lòng thử lại.';
+    } finally {
+      submit.disabled = activate.disabled = false;
+    }
+  });
   for (const tab of [$('login-tab'), $('register-tab')]) {
     tab.addEventListener('click', () => {
       const register = tab.id === 'register-tab';
       for (const item of [$('login-tab'), $('register-tab')]) { item.setAttribute('aria-selected', String(item === tab)); item.tabIndex = item === tab ? 0 : -1; }
       $('auth-content').setAttribute('aria-labelledby', tab.id);
       $('auth-title').textContent = register ? 'Bắt đầu cùng UniMatch.' : 'Chào bạn trở lại.';
-      $('auth-description').textContent = register ? 'Chọn tài khoản để tạo hồ sơ đăng nhập của bạn.' : 'Đăng nhập để bắt đầu hành trình khóa luận.';
+      $('auth-description').textContent = register ? 'Tạo tài khoản sinh viên với mật khẩu từ 12 ký tự.' : 'Đăng nhập để vào không gian khóa luận.';
+      setMode(register ? 'register' : 'login');
     });
     tab.addEventListener('keydown', event => { if (['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) { event.preventDefault(); const next = event.key === 'Home' ? $('login-tab') : event.key === 'End' ? $('register-tab') : tab.id === 'login-tab' ? $('register-tab') : $('login-tab'); next.click(); next.focus(); } });
   }
+  if (new URLSearchParams(location.search).get('mode') === 'register') $('register-tab').click();
   if (new URLSearchParams(location.search).has('error')) $('auth-status').textContent = 'Đăng nhập chưa hoàn tất. Hãy xác minh lại và thử lần nữa.';
   try {
     const response = await fetch('/api/auth/config'); if (!response.ok) throw new Error(); config = await response.json();
     const missing = Object.entries(config.providers).filter(([,ready]) => !ready).map(([provider]) => ({google:'Google',github:'GitHub',facebook:'Facebook'}[provider]));
-    $('auth-notice').textContent = missing.length ? `Chưa cấu hình đăng nhập ${missing.join(', ')}. Người quản trị cần bổ sung cấu hình dịch vụ.` : 'Chọn tài khoản để tiếp tục.';
+    $('auth-notice').textContent = missing.length ? `${missing.join(', ')} hiện chưa khả dụng.` : '';
     availability();
     buttons.forEach(button => button.addEventListener('click', async () => {
       buttons.forEach(item => {item.disabled=true;}); $('auth-status').textContent='Đang chuyển đến dịch vụ đăng nhập…';

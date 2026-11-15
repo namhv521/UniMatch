@@ -88,7 +88,8 @@ class PortalStore:
         if not token or len(token) > 200:
             return None
         with self.connect() as db:
-            row = db.execute('SELECT u.id,u.name,u.provider FROM users u JOIN sessions s ON s.user_id=u.id '
+            row = db.execute('SELECT u.id,u.name,u.provider,e.role,e.advisor_id,e.advisor_semester '
+                             'FROM users u JOIN sessions s ON s.user_id=u.id LEFT JOIN email_accounts e ON e.user_id=u.id '
                              'WHERE s.token=? AND s.expires>?', (hashed(token), time.time())).fetchone()
         return dict(row) if row else None
 
@@ -114,8 +115,8 @@ def install_portal(app):
     router = APIRouter()
     from .thesis import install_thesis, role_for, role_roster
     roster = role_roster()
-    legacy_coordinator = (os.environ.get('UNIMATCH_DEPLOYMENT') == 'production'
-                          and not roster and not os.environ.get('UNIMATCH_THESIS_SEMESTER', '').strip())
+    semester = os.environ.get('UNIMATCH_THESIS_SEMESTER', '').strip()
+    legacy_coordinator = os.environ.get('UNIMATCH_DEPLOYMENT') == 'production' and not roster and not semester
     origin = os.environ.get('UNIMATCH_PUBLIC_ORIGIN', 'http://127.0.0.1:8767').rstrip('/')
     parsed = urlparse(origin)
     if (parsed.scheme not in ('https', 'http') or not parsed.hostname or parsed.path
@@ -135,7 +136,20 @@ def install_portal(app):
         user = store.session(request.cookies.get(COOKIE))
         if user is None:
             raise HTTPException(401, 'login_required')
-        return {**user, **({'role': 'dean'} if legacy_coordinator else role_for(user['id'], roster))}
+        account_role = user.pop('role')
+        advisor_id = user.pop('advisor_id')
+        advisor_semester = user.pop('advisor_semester')
+        if account_role:
+            roles = {'role': 'student' if account_role == 'dean' and advisor_semester not in (None, semester) else account_role}
+            if account_role == 'faculty':
+                roles['advisor_id'] = advisor_id if advisor_semester in (None, semester) else None
+        else:
+            roles = {'role': 'dean'} if legacy_coordinator else role_for(user['id'], roster)
+        return {**user, **roles}
+
+    def set_session_cookie(response, token):
+        response.set_cookie(COOKIE, token, max_age=28800, secure=secure, httponly=True, samesite='lax', path='/')
+        return response
 
     app.state.portal_authenticated = authenticated
 
@@ -212,7 +226,7 @@ def install_portal(app):
         except (httpx.HTTPError, ValueError, KeyError, TypeError):
             return RedirectResponse('/login.html?error=provider', status_code=303)
         response = RedirectResponse('/landing.html', status_code=303)
-        response.set_cookie(COOKIE, session, max_age=28800, secure=secure, httponly=True, samesite='lax', path='/')
+        set_session_cookie(response, session)
         response.delete_cookie('unimatch_oauth', path='/api/auth/callback')
         return response
 
@@ -258,6 +272,8 @@ def install_portal(app):
                 'source': 'GitHub đã duyệt + hồ sơ giảng viên chính thức',
                 'production_promoted': False}
 
+    from .email_auth import install_email_auth
+    install_email_auth(router, store, check_origin, set_session_cookie)
     install_thesis(router, app, store, authenticated, check_origin)
     # Put exact endpoints before the frontend StaticFiles catch-all.
     old = list(app.router.routes)
