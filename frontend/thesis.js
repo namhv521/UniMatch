@@ -36,6 +36,19 @@ const errors = {
   invalid_registration_count: 'Cần từ 1 đến 1.000 sinh viên đã đăng ký để tạo phương án.',
   stale_or_infeasible_proposal: 'Phương án đã thay đổi hoặc không khả thi. Hãy tạo lại trước khi công bố.',
   role_required: 'Tài khoản hiện tại không có quyền thực hiện thao tác này.',
+  invalid_roster_csv: 'Không đọc được CSV. Hãy lưu lại dưới dạng CSV UTF-8.',
+  invalid_roster_headers: 'CSV cần các cột student_id, name, email. Có thể thêm phone, topic và skills.',
+  invalid_roster_row: 'Dòng CSV có dữ liệu thiếu hoặc sai định dạng.',
+  duplicate_roster_identity: 'Mã sinh viên hoặc email bị trùng trong CSV.',
+  roster_limit: 'Danh sách hỗ trợ tối đa 500 sinh viên mỗi kỳ.',
+  semester_roster_required: 'Hãy nhập danh sách CSV của kỳ.',
+  not_in_semester_roster: 'Email đăng nhập chưa có trong danh sách khóa luận của kỳ.',
+  preferences_closed: 'Trưởng khoa đã khóa nộp nguyện vọng.',
+  close_preferences_first: 'Hãy khóa nộp nguyện vọng trước khi chạy mô hình.',
+  matching_models_unavailable: 'Server chưa nạp đủ checkpoint PPO và DQN.',
+  matching_model_contract_mismatch: 'Checkpoint đang phục vụ chưa khớp cấu hình suy luận.',
+  publication_algorithm_required: 'Chọn phương án PPO hoặc DQN trước khi công bố.',
+  semester_not_published: 'Kỳ này chưa có danh sách đã công bố.',
 };
 
 let user, state, catalog = [], rankings = [], catalogError = '', rankingError = '', selected, previousQuestion, saving = false;
@@ -53,7 +66,11 @@ async function api(path = '', body) {
     throw new Error('Phiên đăng nhập đã hết hạn.');
   }
   const result = await response.json();
-  if (!response.ok) throw new Error(errors[result.detail] || 'Không hoàn tất được thao tác. Vui lòng thử lại.');
+  if (!response.ok) {
+    const detail = result.detail;
+    const message = errors[detail?.code ?? detail] || 'Không hoàn tất được thao tác. Vui lòng thử lại.';
+    throw new Error(detail?.row ? `Dòng ${detail.row}. ${message}` : message);
+  }
   return result;
 }
 
@@ -114,13 +131,13 @@ function studentView() {
   const profile = state.profile;
   const accepted = state.requests.some(r => r.status === 'accepted');
   const pending = state.requests.filter(r => r.status === 'pending').sort((a, b) => a.rank - b.rank);
-  const canChoose = profile && !accepted && !state.published;
+  const canChoose = profile && state.in_roster && !accepted && !state.published && !state.preferences_closed;
   const available = catalog.filter(a => !state.requests.some(r => r.advisor_id === a.advisor_id && r.status === 'rejected'));
   return `<section class="work-section">
     <h2>Khảo sát và trắc nghiệm</h2>
     ${profile ? skillList(profile.skills) : '<p>Chọn vai trò bạn quan tâm, tự đánh giá và làm trắc nghiệm trước khi xem gợi ý giảng viên.</p>'}
     ${profile ? '<p class="help">Kết quả sơ bộ kết hợp tự đánh giá với số câu trả lời đúng của từng vai trò.</p>' : ''}
-    ${state.published ? '' : profile ? `<details><summary>Cập nhật vai trò và làm lại bài đánh giá</summary>${assessmentForm(profile)}</details>` : assessmentForm(profile)}
+    ${state.published || state.preferences_closed ? '' : profile ? `<details><summary>Cập nhật vai trò và làm lại bài đánh giá</summary>${assessmentForm(profile)}</details>` : assessmentForm(profile)}
   </section>
   <section class="work-section">
     <h2>Giảng viên phù hợp</h2>
@@ -131,6 +148,7 @@ function studentView() {
   </section>
   <section class="work-section">
     <h2>Nguyện vọng hướng dẫn</h2>
+    ${state.preferences_closed ? '<p>Trưởng khoa đã khóa nộp và sửa nguyện vọng.</p>' : !state.in_roster ? '<p>Email đăng nhập của bạn chưa có trong danh sách khóa luận kỳ này.</p>' : ''}
     ${canChoose ? '<p class="help">Chọn từ một đến ba giảng viên. Khi một giảng viên nhận hướng dẫn, các nguyện vọng còn chờ sẽ được rút.</p>' : ''}
     ${state.assignment ? `<p><strong>Giảng viên được phân công:</strong> ${esc(state.assignment.advisor_name)}</p>` : ''}
     ${state.requests.length ? `<ul class="thesis-skills">${[...state.requests].sort((a, b) => (a.rank ?? 4) - (b.rank ?? 4)).map(r => `<li><strong>${r.rank ? `Ưu tiên ${r.rank} · ` : ''}${esc(advisorName(r.advisor_id))}</strong><span>${statusNames[r.status]}</span></li>`).join('')}</ul>` : '<p>Bạn chưa gửi nguyện vọng hướng dẫn.</p>'}
@@ -144,8 +162,8 @@ function studentView() {
       ${contactFields()}
       <button class="primary">${pending.length ? 'Cập nhật nguyện vọng' : 'Gửi nguyện vọng'}</button>
     </form>` : ''}
-    ${accepted && !state.published ? `<form data-action="topic">${topicField()}<button class="secondary">Lưu mô tả đề tài</button></form>` : ''}
-    ${(accepted || state.published) && state.requests.some(r => r.rank) ? `<details><summary>Cập nhật thông tin liên hệ</summary>
+    ${accepted && !state.published && !state.preferences_closed ? `<form data-action="topic">${topicField()}<button class="secondary">Lưu mô tả đề tài</button></form>` : ''}
+    ${(accepted || state.published || state.preferences_closed) && state.requests.some(r => r.rank) ? `<details><summary>Cập nhật thông tin liên hệ</summary>
       <form data-action="contact">${contactFields()}<button class="secondary">Lưu thông tin liên hệ</button></form></details>` : ''}
     ${state.published && state.topic_description ? `<h3>Mô tả đề tài đã lưu</h3><p class="topic-description">${esc(state.topic_description)}</p>` : ''}
     ${canChoose && pending.length ? '<form data-action="withdraw"><button class="secondary">Rút các nguyện vọng đang chờ</button></form>' : ''}
@@ -169,50 +187,151 @@ function facultyView() {
         <button class="secondary" value="rejected">Từ chối</button>
       </form>` : ''}
     </article>`).join('') : '<p>Sinh viên chọn bạn sẽ xuất hiện tại đây.</p>'}
-    ${state.published ? `<h2>Nhóm đã công bố</h2>${state.assignments.length ?
-      `<ul>${state.assignments.map(r => `<li>${esc(r.student_name)}</li>`).join('')}</ul>` : '<p>Chưa có sinh viên được phân công cho bạn.</p>'}` : ''}
+    ${state.published ? `<h2>Nhóm đã công bố</h2>${contactTable(state.assignments.map(r => ({...r, name: r.student_name})),
+      'Chưa có sinh viên được phân công cho bạn.')}` : ''}
   </section>
   ${state.published ? `<section class="work-section"><h2>Sinh viên đã đăng ký bạn hướng dẫn</h2>
-    ${state.registered_students.length ? `<div class="table-scroll" tabindex="0" role="region" aria-label="Thông tin liên hệ sinh viên">
-      <table><thead><tr><th scope="col">Họ tên</th><th scope="col">Email</th><th scope="col">Số điện thoại</th></tr></thead>
-        <tbody>${state.registered_students.map(row => `<tr><th scope="row">${esc(row.name)}</th>
-          <td>${esc(row.email || 'Chưa cung cấp')}</td><td>${esc(row.phone || 'Chưa cung cấp')}</td></tr>`).join('')}
-        </tbody></table></div>` : '<p>Chưa có sinh viên đăng ký bạn hướng dẫn trong kỳ này.</p>'}
+    ${contactTable(state.registered_students, 'Chưa có sinh viên đăng ký bạn hướng dẫn trong kỳ này.')}
     </section>` : ''}`;
+}
+
+function contactTable(rows, empty) {
+  return rows.length ? `<div class="table-scroll" tabindex="0" role="region" aria-label="Thông tin liên hệ sinh viên">
+    <table><thead><tr><th scope="col">Họ tên</th><th scope="col">Email</th><th scope="col">Số điện thoại</th></tr></thead>
+    <tbody>${rows.map(row => `<tr><th scope="row">${esc(row.name)}</th>
+      <td>${esc(row.email || 'Chưa cung cấp')}</td><td>${esc(row.phone || 'Chưa cung cấp')}</td></tr>`).join('')}
+    </tbody></table></div>` : `<p>${empty}</p>`;
 }
 
 function deanView() {
   const proposal = state.proposal;
-  return `<section class="work-section">
-    <h2>Ngưỡng tin tưởng</h2>
-    <p>Cặp đạt từ <strong>${state.threshold}%</strong> được đánh dấu xanh. Cặp dưới ngưỡng hoặc thiếu dữ liệu hiện màu vàng để bạn rà soát.</p>
-    <p class="help">Ngưỡng áp dụng cho điểm phù hợp của cặp. Điểm này chưa được hiệu chuẩn thành xác suất hướng dẫn thành công.</p>
-    ${state.published ? '' : `<form data-action="threshold" class="thesis-actions">
-      <label for="confidence-threshold">Ngưỡng (%)</label><input type="number" id="confidence-threshold" name="threshold" min="0" max="100" step="1" required value="${state.threshold}">
-      <button class="secondary">Lưu ngưỡng</button>
-    </form>`}
+  return `<div class="dean-layout"><div class="dean-main">
+  <section class="work-section"><h2>Danh sách khóa luận của kỳ</h2>
+    <p><strong>${state.roster_loaded ? state.student_count : 0}</strong> sinh viên trong CSV ·
+      <strong>${state.roster_loaded ? state.submitted_count : 0}</strong> đã điền hồ sơ trực tuyến.</p>
+    ${state.roster_loaded ? `<details><summary>Xem danh sách đã nhập</summary><div class="table-scroll" tabindex="0" role="region" aria-label="Danh sách sinh viên đã nhập">
+      <table><thead><tr><th scope="col">Mã sinh viên</th><th scope="col">Họ tên</th><th scope="col">Hồ sơ trực tuyến</th></tr></thead>
+      <tbody>${state.roster_preview.map(row => `<tr><th scope="row">${esc(row.student_id)}</th><td>${esc(row.name)}</td>
+        <td>${row.submitted ? 'Đã nộp' : 'Chưa nộp'}</td></tr>`).join('')}</tbody></table></div></details>` : ''}
+    ${state.published ? '' : `<form data-action="roster" class="thesis-actions">
+      <label for="thesis-roster-file">${state.roster_loaded ? 'Thay danh sách CSV' : 'Tải danh sách CSV'}</label>
+      <input id="thesis-roster-file" type="file" name="csv_file" accept=".csv,text/csv" required>
+      ${state.roster_loaded ? '<label class="confirmation"><input type="checkbox" required> Dùng tệp này để thay toàn bộ danh sách hiện tại.</label>' : ''}
+      <button class="primary">Lưu danh sách</button>
+    </form>
+    <p class="help">Yêu cầu <code>student_id, name, email</code>. Có thể thêm <code>phone, topic, skills</code>.
+      Dùng đúng email đăng nhập UniMatch để ghép hồ sơ. <a href="data:text/csv;charset=utf-8,student_id%2Cname%2Cemail%2Cphone%2Ctopic%2Cskills%0A" download="unimatch-danh-sach.csv">Tải CSV mẫu</a></p>`}
   </section>
-  <section class="work-section">
-    <h2>${state.published ? 'Kết quả đã công bố' : 'Phương án phân công'}</h2>
-    <p><strong>${state.student_count}</strong> sinh viên đã đăng ký. Chỉ tiêu bằng số sinh viên đã nhận cộng số chỗ chia đều từ phần còn lại.</p>
+  <section class="work-section"><h2>Nguyện vọng và chỉ tiêu</h2>
+    <p>${state.preferences_closed ? 'Đã khóa nộp nguyện vọng.' : 'Đang mở nộp nguyện vọng.'}
+      <strong>${state.pending_count}</strong> nguyện vọng đang chờ giảng viên quyết định.</p>
+    ${!state.published && state.roster_loaded ? `<form data-action="${state.preferences_closed ? 'reopen' : 'close'}">
+      <button class="secondary">${state.preferences_closed ? 'Mở lại nộp nguyện vọng' : 'Khóa nộp nguyện vọng'}</button></form>` : ''}
     ${catalogError ? `<p class="status-error">${esc(catalogError)}</p>` : ''}
-    ${!state.published && catalog.length ? `<form data-action="proposal">
+    ${!state.published && state.roster_loaded && catalog.length ? `<form data-action="proposal">
       <fieldset><legend>Giảng viên tham gia phân công</legend><div class="thesis-roster">
       ${catalog.map(a => {
         const required = state.accepted_advisors.includes(a.advisor_id);
         return `<label class="advisor-option"><input type="checkbox" name="advisor_id" value="${esc(a.advisor_id)}" ${required || selected.has(a.advisor_id) ? 'checked' : ''} ${required ? 'disabled' : ''}>
-        <span>${esc(a.advisor_name)}${required ? '<small>Đã nhận sinh viên</small>' : ''}</span></label>`;
+        <span>${esc(a.advisor_name)}<small data-quota="${esc(a.advisor_id)}"></small></span></label>`;
       }).join('')}
-      </div></fieldset><button class="primary" ${state.student_count ? '' : 'disabled'}>Tạo phương án</button>
+      </div></fieldset><p class="help">Chỉ tiêu tổng bằng số đã nhận cộng số chỗ chia đều từ phần còn lại.</p>
+      <button class="primary" ${state.preferences_closed ? '' : 'disabled'}>Chốt chỉ tiêu và chạy PPO / DQN</button>
     </form>` : ''}
-    ${proposal ? tables(proposal) : '<p>Phương án xuất hiện sau khi bạn chọn giảng viên và chạy phân công.</p>'}
-    ${proposal?.status === 'feasible' && !state.published ? `<form data-action="publish" class="thesis-actions thesis-publish">
-      <label class="confirmation"><input type="checkbox" required> Tôi đã rà soát phương án. Công bố sẽ khóa thay đổi trong kỳ này.</label>
-      <button class="primary">Công bố phân công</button>
+  </section>
+  <section class="work-section"><h2>${state.published ? 'Kết quả đã công bố' : 'So sánh phương án phân công'}</h2>
+    ${state.published_algorithm ? `<p>Phương án đang công bố · <strong>${esc(state.published_algorithm.toUpperCase())}</strong></p>` : ''}
+    ${proposal?.results ? comparison(proposal) : proposal ? tables(proposal) : '<p>So sánh sẽ xuất hiện sau khi chạy cả hai mô hình.</p>'}
+    ${proposal?.results && proposal.status === 'feasible' && !state.published ? `<form data-action="publish" class="thesis-actions thesis-publish">
+      <label>Phương án công bố <select name="algorithm" required><option value="">Chọn phương án</option><option value="ppo">PPO</option><option value="dqn">DQN</option></select></label>
+      <label class="confirmation"><input type="checkbox" required> Tôi đã rà soát phương án và muốn gửi danh sách đến giảng viên.</label>
+      <button class="primary">Công bố danh sách</button>
     </form>` : ''}
-  </section>`;
+    ${state.published ? `<form data-action="revoke" class="thesis-publish">
+      <label class="confirmation"><input type="checkbox" required> Ẩn danh sách đang công bố để sửa phương án.</label>
+      <button class="secondary">Thu hồi công bố</button>
+    </form>` : ''}
+  </section></div>
+  <aside class="work-section dean-threshold" aria-labelledby="threshold-title">
+    <h2 id="threshold-title">Ngưỡng tin tưởng</h2>
+    <strong class="threshold-value">${state.threshold}%</strong>
+    <p class="help">So sánh điểm phù hợp E4 của phương án PPO và DQN. E4 là điểm tương thích, chưa được hiệu chuẩn thành xác suất.</p>
+    ${state.published ? '' : `<form data-action="threshold">
+      <label for="confidence-threshold">Ngưỡng (%)</label><input type="number" id="confidence-threshold" name="threshold" min="0" max="100" step="1" required value="${state.threshold}">
+      <button class="secondary">Lưu ngưỡng</button>
+    </form>`}
+    <ul class="confidence-key"><li><span class="thesis-confidence thesis-confidence-high">Cao</span> Cả hai đạt</li>
+      <li><span class="thesis-confidence thesis-confidence-review">Trung bình</span> Một phương án đạt</li>
+      <li><span class="thesis-confidence thesis-confidence-low">Chưa đủ bằng chứng</span> Chưa có phương án đạt</li></ul>
+  </aside></div>`;
 }
 
+function updatePreviewQuotas() {
+  const controls = [...content.querySelectorAll('[data-action="proposal"] input[name="advisor_id"]:checked')];
+  const ids = controls.map(input => input.value).sort();
+  const counts = state.accepted_counts;
+  const remaining = state.student_count - Object.values(counts).reduce((sum, count) => sum + count, 0);
+  const shares = new Map(ids.map((id, index) => [id, Math.floor(remaining / ids.length) + Number(index < remaining % ids.length)]));
+  for (const label of content.querySelectorAll('[data-quota]')) {
+    const id = label.dataset.quota;
+    const accepted = counts[id] ?? 0;
+    const share = shares.get(id);
+    label.textContent = share === undefined ? '' : `Đã nhận ${accepted} · Chia thêm ${share} · Tổng ${accepted + share}`;
+  }
+  const run = content.querySelector('[data-action="proposal"] button');
+  if (run) run.disabled = !state.preferences_closed || !ids.length;
+  const publish = content.querySelector('[data-action="publish"] button');
+  if (publish) {
+    const previous = state.proposal.quotas.map(q => q.advisor_id).sort();
+    publish.disabled = JSON.stringify(ids) !== JSON.stringify(previous);
+  }
+}
+
+function comparison(proposal) {
+  const {ppo, dqn} = proposal.results;
+  if (proposal.status !== 'feasible') return '<p class="status-error">Không thể phân công đủ với danh sách và chỉ tiêu hiện tại. Kiểm tra các giảng viên tham gia và quyết định từ chối.</p>';
+  const byStudent = new Map(dqn.assignments.map(row => [row.user_id, row]));
+  const byAdvisor = run => run.assignments.reduce((groups, row) => {
+    if (!groups.has(row.advisor_id)) groups.set(row.advisor_id, []);
+    groups.get(row.advisor_id).push(row);
+    return groups;
+  }, new Map());
+  const groups = [byAdvisor(ppo), byAdvisor(dqn)];
+  const score = value => value == null ? 'Chưa có điểm' : percent(value);
+  const loadAndFit = rows => {
+    const scores = rows.flatMap(row => row.score == null ? [] : [row.score]);
+    return `<td>${rows.length} sinh viên<small>${score(scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null)}</small></td>`;
+  };
+  const labels = ['Chưa đủ bằng chứng', 'Trung bình', 'Cao'];
+  const tones = ['low', 'review', 'high'];
+  const grades = ppo.assignments.map(a => {
+    const other = byStudent.get(a.user_id);
+    return Number(a.score != null && a.score * 100 >= state.threshold - 1e-9) +
+      Number(other.score != null && other.score * 100 >= state.threshold - 1e-9);
+  });
+  const same = ppo.assignments.filter(a => byStudent.get(a.user_id).advisor_id === a.advisor_id).length;
+  return `<p class="help">Checkpoint ${esc(proposal.checkpoint || 'đang phục vụ')} · Hai mô hình chọn cùng giảng viên cho ${same}/${ppo.assignments.length} sinh viên.
+    Cao ${grades.filter(n => n === 2).length} · Trung bình ${grades.filter(n => n === 1).length} · Chưa đủ bằng chứng ${grades.filter(n => n === 0).length}.</p>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="So sánh chỉ số mô hình"><table><caption>Chỉ số PPO và DQN</caption>
+      <thead><tr><th scope="col">Mô hình</th><th scope="col">Phân đủ</th><th scope="col">Điểm phù hợp trung bình</th>
+        <th scope="col">Có điểm</th><th scope="col">Vi phạm chỉ tiêu</th><th scope="col">Thời gian</th></tr></thead>
+      <tbody>${Object.entries(proposal.results).map(([name, run]) => `<tr><th scope="row">${name.toUpperCase()}</th>
+        <td>${percent(run.metrics.coverage)}</td><td>${score(run.metrics.mean_compatibility)}</td><td>${run.metrics.scored_students}</td>
+        <td>${run.metrics.constraint_violations}</td><td>${Number(run.elapsed_seconds).toFixed(2)} giây</td></tr>`).join('')}</tbody></table></div>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Chuyên môn và chỉ tiêu"><table><caption>Chuyên môn và tải theo giảng viên</caption>
+      <thead><tr><th scope="col">Giảng viên</th><th scope="col">Chủ đề và kỹ năng có trong hồ sơ</th><th scope="col">Đã nhận</th>
+        <th scope="col">Chỉ tiêu</th><th scope="col">PPO · tải / E4</th><th scope="col">DQN · tải / E4</th></tr></thead>
+      <tbody>${proposal.quotas.map(q => `<tr><th scope="row">${esc(q.advisor_name)}</th><td>${esc(q.skills.join(', ') || 'Chưa có nhãn')}</td>
+        <td>${q.accepted}</td><td>${q.total}</td>${groups.map(group => loadAndFit(group.get(q.advisor_id) ?? [])).join('')}</tr>`).join('')}</tbody></table></div>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="So sánh từng sinh viên"><table><caption>Đối chiếu từng sinh viên</caption>
+      <thead><tr><th scope="col">Sinh viên</th><th scope="col">PPO</th><th scope="col">DQN</th><th scope="col">Mức tin tưởng</th></tr></thead>
+      <tbody>${ppo.assignments.map((row, i) => {
+        const other = byStudent.get(row.user_id);
+        return `<tr><th scope="row">${esc(row.student_name)}<small>${esc(row.student_id)} · ${row.accepted ? 'Đã được nhận' : row.submitted ? 'Đã điền hồ sơ' : 'Từ CSV'}</small></th>
+          <td>${esc(row.advisor_name)}<small>${score(row.score)}</small></td><td>${esc(other.advisor_name)}<small>${score(other.score)}</small></td>
+          <td><span class="thesis-confidence thesis-confidence-${tones[grades[i]]}">${labels[grades[i]]}</span>${other.advisor_id !== row.advisor_id ? '<small>Khác giảng viên</small>' : ''}</td></tr>`;
+      }).join('')}</tbody></table></div>`;
+}
 function tables(proposal) {
   return `<div class="table-scroll" tabindex="0" role="region" aria-label="Chỉ tiêu hướng dẫn"><table>
     <caption>Chỉ tiêu hướng dẫn theo giảng viên</caption>
@@ -241,6 +360,7 @@ async function refresh() {
     rankingError = recommended.reason?.message ?? '';
     selected ??= new Set(state.proposal?.quotas.map(q => q.advisor_id) ?? catalog.map(a => a.advisor_id));
     content.innerHTML = {student: studentView, faculty: facultyView, dean: deanView}[user.role]();
+    if (user.role === 'dean') updatePreviewQuotas();
     const assessment = content.querySelector('[data-action="assessment"]');
     if (assessment) updateTracks(assessment);
     $('fill-skill-question').hidden = !state.profile?.skills.some(s => s.status !== 'unassessed');
@@ -271,6 +391,7 @@ content.addEventListener('change', event => {
   if (input.matches('[data-action="proposal"] input')) {
     if (input.checked) selected.add(input.value);
     else selected.delete(input.value);
+    updatePreviewQuotas();
   }
 });
 
@@ -304,7 +425,16 @@ content.addEventListener('submit', async event => {
   else if (action === 'decision') payload = {decision: event.submitter.value, user_id: form.dataset.student};
   else if (action === 'threshold') payload = {threshold: Number(data.get('threshold'))};
   else if (action === 'proposal') payload = {advisor_ids: [...new Set([...selected, ...state.accepted_advisors])]};
-  else if (action === 'publish') payload = {id: state.proposal.id};
+  else if (action === 'publish') payload = {id: state.proposal.id, algorithm: data.get('algorithm')};
+  else if (action === 'roster') {
+    const file = data.get('csv_file');
+    if (!file?.size || file.size > 1024 * 1024) {
+      showStatus('Chọn tệp CSV có nội dung và dung lượng tối đa 1 MB.', true, true);
+      return;
+    }
+    try { payload = {csv_text: await file.text()}; }
+    catch { showStatus('Không đọc được tệp CSV.', true, true); return; }
+  } else if (['close', 'reopen', 'revoke'].includes(action)) payload = {};
   const buttons = [...content.querySelectorAll('button:not(:disabled)')];
   saving = true;
   buttons.forEach(button => { button.disabled = true; });
@@ -315,6 +445,8 @@ content.addEventListener('submit', async event => {
     const messages = {assessment: 'Đã lưu kết quả đánh giá.', choice: 'Đã lưu nguyện vọng theo thứ tự ưu tiên.', withdraw: 'Đã rút các nguyện vọng đang chờ.',
       topic: 'Đã lưu mô tả đề tài.',
       contact: 'Đã lưu thông tin liên hệ.',
+      roster: 'Đã lưu danh sách khóa luận của kỳ.', close: 'Đã khóa nộp nguyện vọng. Giảng viên vẫn có thể duyệt.',
+      reopen: 'Đã mở lại nộp nguyện vọng.', revoke: 'Đã thu hồi công bố. Có thể chỉnh và chạy lại.',
       decision: 'Đã lưu quyết định.', threshold: 'Đã lưu ngưỡng.', publish: 'Đã công bố kết quả phân công.',
       proposal: state.proposal?.status === 'feasible' ? 'Phương án đã sẵn sàng để rà soát.' : 'Chưa có phương án khả thi.'};
     showStatus(messages[action]);
@@ -407,7 +539,7 @@ if (user) {
   }
 }
 
-if (user?.role === 'faculty') {
+if (['faculty', 'dean'].includes(user?.role)) {
   setInterval(async () => {
     if (!state || document.hidden || saving || content.contains(document.activeElement)) return;
     const previous = state;
@@ -416,11 +548,18 @@ if (user?.role === 'faculty') {
       if (saving || state !== previous || content.contains(document.activeElement)
           || JSON.stringify(previous) === JSON.stringify(latest)) return;
       state = latest;
-      content.innerHTML = facultyView();
-      if (latest.published && !previous.published) showStatus('Trưởng khoa đã công bố kết quả.');
-      else if (latest.requests.some(r => r.status === 'pending'
+      if (user.role === 'dean') {
+        if (content.querySelector('input[type="file"]')?.files.length) { state = previous; return; }
+        content.innerHTML = deanView();
+        updatePreviewQuotas();
+      } else {
+        content.innerHTML = facultyView();
+        if (latest.published && !previous.published) showStatus('Trưởng khoa đã công bố kết quả.');
+        else if (!latest.published && previous.published) showStatus('Trưởng khoa đã thu hồi danh sách công bố.');
+        else if (latest.requests.some(r => r.status === 'pending'
           && !previous.requests.some(old => old.user_id === r.user_id && old.status === 'pending'))) {
-        showStatus('Bạn có nguyện vọng hướng dẫn mới.');
+          showStatus('Bạn có nguyện vọng hướng dẫn mới.');
+        }
       }
     } catch { /* Keep the last loaded faculty view if polling fails. */ }
   }, 30000);

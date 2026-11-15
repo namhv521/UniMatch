@@ -6,6 +6,56 @@ from fastapi.testclient import TestClient
 from test_phase7_service import service
 
 
+def test_dean_csv_intake_locks_preferences_and_revokes_publication(service, tmp_path, monkeypatch):
+    from backend.app.rebuild_api import create_app
+    from backend.app import thesis
+
+    monkeypatch.setenv('UNIMATCH_AUTH_DB', str(tmp_path / 'portal.sqlite3'))
+    monkeypatch.setenv('UNIMATCH_THESIS_SEMESTER', 'fixture-intake')
+    monkeypatch.setenv('UNIMATCH_ROLE_ROSTER', json.dumps({
+        'github:dean': {'role': 'dean'}, 'github:faculty': {'role': 'faculty', 'advisor_id': 'a'},
+    }))
+    app = create_app(service=service, frontend_dir=tmp_path)
+
+    def account(subject, provider='github'):
+        cookie = app.state.portal_store.create_session(provider, subject, subject)
+        return TestClient(app, cookies={'unimatch_session': cookie})
+
+    dean, faculty = account('dean'), account('faculty')
+    student, outsider = account('student@example.test', 'email'), account('outsider')
+    base = '/api/thesis'
+    csv = 'student_id,name,email,phone\nS1,Student,student@example.test,0912345678\n'
+    assert outsider.post(base + '/roster', json={'csv_text': csv}).status_code == 403
+    assert dean.post(base + '/roster', json={'csv_text': csv + 'S2,Other,student@example.test,\n'}).status_code == 422
+    assert dean.post(base + '/roster', json={'csv_text': csv}).status_code == 200
+    assert student.get(base).json()['in_roster'] is True
+    assert outsider.get(base).json()['in_roster'] is False
+    assert outsider.post(base + '/choice', json={'advisor_ids': ['a']}).status_code == 409
+    assert dean.post(base + '/proposal', json={'advisor_ids': ['a']}).status_code == 409
+    assert dean.post(base + '/close', json={}).status_code == 200
+    assert student.post(base + '/choice', json={'advisor_ids': ['a']}).status_code == 409
+
+    def frozen_results(active, students, requests, selected):
+        assert active is service and not requests and selected == ['a']
+        assert len(students) == 1 and not students[0]['submitted']
+        row = {'user_id': students[0]['user_id'], 'student_name': students[0]['name'],
+               'advisor_id': 'a', 'advisor_name': 'Technical A'}
+        return {'id': 'sealed', 'status': 'feasible',
+                'results': {name: {'status': 'feasible', 'assignments': [row]} for name in ('ppo', 'dqn')}}
+
+    monkeypatch.setattr(thesis, 'compare_models', frozen_results)
+    assert dean.post(base + '/proposal', json={'advisor_ids': ['a']}).status_code == 200
+    assert faculty.get(base).json()['assignments'] == []
+    assert dean.post(base + '/publish', json={'id': 'sealed', 'algorithm': 'dqn'}).status_code == 200
+    assert faculty.get(base).json()['assignments'][0]['phone'] == '0912345678'
+    assert student.get(base).json()['assignment']['advisor_id'] == 'a'
+    assert faculty.post(base + '/revoke', json={}).status_code == 403
+    assert dean.post(base + '/revoke', json={}).status_code == 200
+    assert faculty.get(base).json()['assignments'] == []
+    assert student.get(base).json()['assignment'] is None
+    assert dean.get(base).json()['preferences_closed'] is True
+
+
 def test_role_assessment_and_ranked_preferences(service, tmp_path, monkeypatch):
     from backend.app.rebuild_api import create_app
     from backend.app.thesis_assessment import ASSESSMENT_VERSION

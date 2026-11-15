@@ -59,6 +59,17 @@ Luồng chọn định hướng, công cụ và nguyện vọng tham khảo [Kh�
 
 ## Phân công
 
+### Danh sách CSV và vòng công bố
+
+- Nhập tối đa 500 dòng UTF-8 với `student_id,name,email`. Có thể thêm `phone,topic,skills`. Cùng kỳ chỉ có một danh sách CSV hiện hành. API từ chối toàn bộ tệp nếu có dòng sai hoặc trùng mã, email.
+- `thesis_intake` lưu danh sách và trạng thái khóa. Hệ thống ghép bằng email tài khoản nội bộ đã chuẩn hóa. Địa chỉ OAuth và email liên hệ do sinh viên nhập không dùng làm khóa ghép. Tài khoản email tự đăng ký chưa xác minh quyền sở hữu địa chỉ.
+- `POST /api/thesis/roster` nhận `csv_text`. Các thao tác `close`, `reopen` và `revoke` thuộc quyền trưởng khoa. Khi đã khóa, chỉ giảng viên được duyệt nguyện vọng cũ. Hồ sơ, quyết định hoặc danh sách thay đổi làm mất hiệu lực phương án chưa công bố.
+- `proposal` dùng chung registry hành động, taxonomy, encoder, quota và ràng buộc cho hai checkpoint. Nếu release có catalog, cả hai dùng V3. Ghép đã nhận là ràng buộc cố định. Hồ sơ chỉ có CSV vẫn tham gia. Hồ sơ thiếu dữ liệu chuyên môn có điểm E4 rỗng khi hiển thị.
+- `publish` nhận `id` và `algorithm` là `ppo` hoặc `dqn`. Giảng viên chỉ thấy thông tin liên hệ của sinh viên trong danh sách được phân cho mình hoặc đã chọn mình theo luồng nguyện vọng. Thu hồi bỏ bản công bố và giữ bản nháp phục vụ chỉnh sửa, chạy lại hoặc công bố lại.
+- Ngưỡng so số mô hình có điểm E4 đạt ngưỡng trên từng sinh viên. Nếu PPO và DQN chọn giảng viên khác nhau, giao diện hiển thị cả hai cặp và đánh dấu khác biệt. Bảng chỉ số dùng điểm E4 đã biết khi tính trung bình.
+
+### Công thức chỉ tiêu
+
 Gọi `S` là số hồ sơ đã đăng ký, `A` là số đã được nhận, `k` là số giảng viên trong danh sách trưởng khoa chọn. Chia `S − A` thành `k` phần gần đều. Phần dư đi theo thứ tự mã giảng viên. Với mỗi giảng viên, cộng phần được chia vào số chỗ đã nhận để ra chỉ tiêu tổng.
 
 Ví dụ có 10 hồ sơ, ba giảng viên A, B, C và A đã nhận 2. Tám hồ sơ còn lại chia 3, 3, 2. Chỉ tiêu tổng là 5, 3, 2. Hai hồ sơ đã nhận của A vẫn là cặp cố định.

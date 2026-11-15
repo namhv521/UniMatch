@@ -61,3 +61,7 @@ CREATE TABLE IF NOT EXISTS thesis_contacts (
     PRIMARY KEY (semester, user_id),
     FOREIGN KEY (semester, user_id) REFERENCES thesis_students(semester, user_id)
 );
+CREATE TABLE IF NOT EXISTS thesis_intake (
+    semester TEXT PRIMARY KEY REFERENCES thesis_semesters(semester),
+    roster TEXT NOT NULL, closed INTEGER NOT NULL DEFAULT 0
+);

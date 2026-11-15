@@ -11,6 +11,7 @@ from starlette.concurrency import run_in_threadpool
 
 from .email_auth import normalized_email
 from .thesis_assessment import ASSESSMENT_VERSION, assess, public_assessment, scoring_row
+from .thesis_intake import compare_models, load_intake, read_roster, semester_students
 
 
 def role_roster():
@@ -111,15 +112,16 @@ def install_thesis(router, app, store, authenticated, check_origin):
         return user
 
     @contextmanager
-    def term(*, write=False):
+    def term(*, write=False, allow_published=False):
         if not semester:
             raise HTTPException(503, 'semester_not_configured')
         with store.connect() as db:
             if write:
                 db.execute('INSERT INTO thesis_semesters(semester) VALUES (?) ON CONFLICT(semester) DO NOTHING',
                            (semester,))
-                state = db.execute('UPDATE thesis_semesters SET revision=revision+1 '
-                                   'WHERE semester=? AND published IS NULL RETURNING *', (semester,)).fetchone()
+                restriction = '' if allow_published else ' AND published IS NULL'
+                state = db.execute('UPDATE thesis_semesters SET revision=revision+1 WHERE semester=?'
+                                   + restriction + ' RETURNING *', (semester,)).fetchone()
                 if state is None:
                     raise HTTPException(409, 'semester_published')
             else:
@@ -183,6 +185,18 @@ def install_thesis(router, app, store, authenticated, check_origin):
         return sorted(({'name': r['name'], 'email': r['email'], 'phone': r['phone']} for r in rows
                        if r['user_id'] in eligible), key=lambda row: row['name'].casefold())
 
+    def assigned_students(db, assignments, advisor_id, roster):
+        rows = []
+        for row in assignments:
+            if row['advisor_id'] != advisor_id:
+                continue
+            uid = row['user_id']
+            entry = (roster or {}).get(uid, {})
+            contact = load_contact(db, uid)
+            rows.append({**row, 'email': contact['email'] if contact else entry.get('email'),
+                         'phone': contact['phone'] if contact else entry.get('phone')})
+        return rows
+
     def active_service():
         return app.state.rebuild_get_service()
 
@@ -191,24 +205,29 @@ def install_thesis(router, app, store, authenticated, check_origin):
         user = authenticated(request)
         with term() as (db, state):
             published = json.loads(state['published']) if state['published'] else None
-            result = {'semester': semester, 'published': bool(published), 'threshold': state['threshold']}
+            roster, closed = load_intake(db, semester)
+            result = {'semester': semester, 'published': bool(published), 'threshold': state['threshold'],
+                      'preferences_closed': closed}
             if user['role'] == 'student':
                 row = db.execute('SELECT profile FROM thesis_students WHERE semester=? AND user_id=?',
                                  (semester, user['id'])).fetchone()
                 preference = load_preference(db, user['id'])
                 contact = load_contact(db, user['id'])
                 email_account = db.execute('SELECT email FROM email_accounts WHERE user_id=?', (user['id'],)).fetchone()
+                assignment = next((r for r in published['assignments'] if r['user_id'] == user['id']), None) if published else None
                 return {**result, 'assessment_version': ASSESSMENT_VERSION, 'assessment': public_assessment(),
+                        'in_roster': roster is None or user['id'] in roster,
                         'profile': json.loads(row['profile']) if row else None,
                         'requests': load_requests(db, user_id=user['id']),
                         'topic_description': preference['topic_description'] if preference else '',
                         'contact': dict(contact) if contact else {'email': email_account['email'] if email_account else '', 'phone': ''},
-                        'assignment': next((r for r in published['assignments'] if r['user_id'] == user['id']), None)
-                        if published else None}
+                        'assignment': {key: assignment[key] for key in ('advisor_id', 'advisor_name')} if assignment else None}
             if user['role'] == 'faculty':
                 if not user['advisor_id']:
                     raise HTTPException(409, 'advisor_account_unassigned')
                 requests = load_requests(db, advisor_id=user['advisor_id'])
+                if roster is not None:
+                    requests = [r for r in requests if r['user_id'] in roster]
                 applicants = {row['user_id']: row for row in db.execute(
                     'SELECT s.user_id,u.name,s.profile FROM thesis_students s JOIN users u ON u.id=s.user_id '
                     'JOIN thesis_requests r ON r.semester=s.semester AND r.user_id=s.user_id '
@@ -217,19 +236,30 @@ def install_thesis(router, app, store, authenticated, check_origin):
                 ).fetchall()}
                 count = db.execute('SELECT count(*) AS total FROM thesis_students WHERE semester=?', (semester,)).fetchone()
                 advisor = next((a for a in advisor_catalog(active_service()) if a['advisor_id'] == user['advisor_id']), None)
-                return {**result, 'student_count': count['total'],
+                return {**result, 'student_count': len(roster) if roster is not None else count['total'],
                         'advisor_name': advisor['advisor_name'] if advisor else '',
                         'registered_students': registered_students(db, user['advisor_id'], requests) if published else [],
                         'requests': [{**r, 'topic_description': r['topic_description'] if r['status'] != 'rejected' else None,
                                       'name': applicants[r['user_id']]['name'],
                                       'skills': json.loads(applicants[r['user_id']]['profile'])['skills']}
                                      for r in requests if r['user_id'] in applicants],
-                        'assignments': [r for r in published['assignments'] if r['advisor_id'] == user['advisor_id']]
+                        'assignments': assigned_students(db, published['assignments'], user['advisor_id'], roster)
                         if published else []}
             count = db.execute('SELECT count(*) AS total FROM thesis_students WHERE semester=?', (semester,)).fetchone()
-            return {**result, 'student_count': count['total'],
-                    'proposal': published or (json.loads(state['proposal']) if state['proposal'] else None),
-                    'accepted_advisors': sorted({r['advisor_id'] for r in load_requests(db) if r['status'] == 'accepted'})}
+            requests = [r for r in load_requests(db) if roster is None or r['user_id'] in roster]
+            accepted = Counter(r['advisor_id'] for r in requests if r['status'] == 'accepted')
+            submitted_ids = ({row['user_id'] for row in db.execute(
+                'SELECT user_id FROM thesis_students WHERE semester=?', (semester,)).fetchall()} & roster.keys()
+                if roster is not None else set())
+            return {**result, 'student_count': len(roster) if roster is not None else count['total'],
+                    'roster_loaded': roster is not None,
+                    'submitted_count': len(submitted_ids) if roster is not None else count['total'],
+                    'roster_preview': [{'student_id': row['student_id'], 'name': row['name'], 'submitted': uid in submitted_ids}
+                                       for uid, row in (roster or {}).items()],
+                    'pending_count': sum(r['status'] == 'pending' for r in requests),
+                    'published_algorithm': published.get('algorithm') if published else None,
+                    'proposal': json.loads(state['proposal']) if state['proposal'] else published,
+                    'accepted_counts': dict(accepted), 'accepted_advisors': sorted(accepted)}
 
     @router.get('/api/thesis/catalog')
     def catalog(request: Request):
@@ -254,7 +284,8 @@ def install_thesis(router, app, store, authenticated, check_origin):
 
     def mutate(action, request, payload):
         role = {'assessment': 'student', 'choice': 'student', 'topic': 'student', 'contact': 'student', 'decision': 'faculty',
-                'threshold': 'dean', 'proposal': 'dean', 'publish': 'dean'}[action]
+                'threshold': 'dean', 'proposal': 'dean', 'publish': 'dean', 'roster': 'dean',
+                'close': 'dean', 'reopen': 'dean', 'revoke': 'dean'}[action]
         user = require(request, role)
         if action == 'contact':
             with term() as (db, _):
@@ -266,8 +297,27 @@ def install_thesis(router, app, store, authenticated, check_origin):
             raise HTTPException(422, 'invalid_advisor_selection')
         advisor_ids = payload.get('advisor_ids', [] if payload.get('advisor_id') is None else [payload['advisor_id']])
         active = active_service() if action == 'proposal' or action == 'choice' and advisor_ids else None
-        with term(write=True) as (db, state):
-            if action == 'assessment':
+        replacement = read_roster(payload.get('csv_text')) if action == 'roster' else None
+        with term(write=True, allow_published=action == 'revoke') as (db, state):
+            roster, closed = load_intake(db, semester)
+            if action in ('assessment', 'choice', 'topic') and closed:
+                raise HTTPException(409, 'preferences_closed')
+            if action in ('choice', 'topic') and roster is not None and user['id'] not in roster:
+                raise HTTPException(409, 'not_in_semester_roster')
+            if action == 'revoke':
+                if state['published'] is None:
+                    raise HTTPException(409, 'semester_not_published')
+                db.execute('UPDATE thesis_semesters SET published=NULL WHERE semester=?', (semester,))
+                return {'ok': True}
+            if action == 'roster':
+                db.execute('INSERT INTO thesis_intake(semester,roster) VALUES (?,?) '
+                           'ON CONFLICT(semester) DO UPDATE SET roster=excluded.roster',
+                           (semester, json.dumps(replacement, ensure_ascii=False)))
+            elif action in ('close', 'reopen'):
+                if roster is None:
+                    raise HTTPException(409, 'semester_roster_required')
+                db.execute('UPDATE thesis_intake SET closed=? WHERE semester=?', (int(action == 'close'), semester))
+            elif action == 'assessment':
                 profile = assess(payload)
                 db.execute('INSERT INTO thesis_students(semester,user_id,profile) VALUES (?,?,?) '
                            'ON CONFLICT(semester,user_id) DO UPDATE SET profile=excluded.profile',
@@ -285,6 +335,8 @@ def install_thesis(router, app, store, authenticated, check_origin):
                 student = payload.get('user_id')
                 if decision not in ('accepted', 'rejected') or not isinstance(student, str) or not re.fullmatch('[0-9a-f]{64}', student):
                     raise HTTPException(422, 'invalid_decision')
+                if roster is not None and student not in roster:
+                    raise HTTPException(409, 'not_in_semester_roster')
                 row = db.execute('UPDATE thesis_requests SET status=? WHERE semester=? AND user_id=? '
                                  'AND advisor_id=? AND status=? RETURNING status',
                                  (decision, semester, student, user['advisor_id'], 'pending')).fetchone()
@@ -306,9 +358,17 @@ def install_thesis(router, app, store, authenticated, check_origin):
                         or len(set(selected)) != len(selected)):
                     raise HTTPException(422, 'invalid_advisor_selection')
                 students = load_students(db)
-                if not students or len(students) > 1000:
-                    raise HTTPException(409, 'invalid_registration_count')
-                proposal = allocation(active, students, load_requests(db), selected)
+                requests = load_requests(db)
+                if roster is None:
+                    if not students or len(students) > 1000:
+                        raise HTTPException(409, 'invalid_registration_count')
+                    proposal = allocation(active, students, requests, selected)
+                else:
+                    if not closed:
+                        raise HTTPException(409, 'close_preferences_first')
+                    requests = [r for r in requests if r['user_id'] in roster]
+                    topics = {r['user_id']: r['topic_description'] or '' for r in requests if r['rank'] is not None}
+                    proposal = compare_models(active, semester_students(roster, students, topics), requests, selected)
                 db.execute('UPDATE thesis_semesters SET proposal=? WHERE semester=?',
                            (json.dumps(proposal, ensure_ascii=False), semester))
                 return proposal
@@ -316,7 +376,15 @@ def install_thesis(router, app, store, authenticated, check_origin):
                 proposal = json.loads(state['proposal']) if state['proposal'] else None
                 if not proposal or proposal['id'] != payload.get('id') or proposal['status'] != 'feasible':
                     raise HTTPException(409, 'stale_or_infeasible_proposal')
-                db.execute('UPDATE thesis_semesters SET published=proposal WHERE semester=?', (semester,))
+                if proposal.get('results'):
+                    algorithm = payload.get('algorithm')
+                    if algorithm not in ('ppo', 'dqn') or proposal['results'][algorithm]['status'] != 'feasible':
+                        raise HTTPException(422, 'publication_algorithm_required')
+                    published = {**proposal, 'algorithm': algorithm, 'assignments': proposal['results'][algorithm]['assignments']}
+                else:
+                    published = proposal
+                db.execute('UPDATE thesis_semesters SET published=? WHERE semester=?',
+                           (json.dumps(published, ensure_ascii=False), semester))
                 return {'ok': True}
             db.execute('UPDATE thesis_semesters SET proposal=NULL WHERE semester=?', (semester,))
         return {'ok': True}
@@ -362,7 +430,8 @@ def install_thesis(router, app, store, authenticated, check_origin):
 
     @router.post('/api/thesis/{action}')
     async def change(action: str, request: Request):
-        if action not in {'assessment', 'choice', 'topic', 'contact', 'decision', 'threshold', 'proposal', 'publish'}:
+        if action not in {'assessment', 'choice', 'topic', 'contact', 'decision', 'threshold', 'proposal', 'publish',
+                          'roster', 'close', 'reopen', 'revoke'}:
             raise HTTPException(404, 'unknown_thesis_action')
         check_origin(request)
         payload = await app.state.rebuild_read_body(request)

@@ -33,6 +33,16 @@ UniMatch hỗ trợ một đợt đăng ký và phân công hướng dẫn khóa
 
 ## Luồng trưởng khoa
 
+### Điều phối danh sách CSV
+
+1. Tải CSV UTF-8 của kỳ và kiểm tra mã sinh viên, họ tên, số hồ sơ trực tuyến đã ghép. Email trong CSV phải khớp email đăng nhập UniMatch.
+2. Sinh viên có tên trong CSV gửi nguyện vọng theo luồng hiện có. Giảng viên nhận hoặc từ chối. Trưởng khoa khóa nút nộp nguyện vọng theo thời điểm của khoa. Giảng viên vẫn có thể duyệt những nguyện vọng đang chờ.
+3. Chọn giảng viên tham gia rồi xác nhận chạy PPO và DQN. Mỗi cặp đã được nhận giữ một chỗ cố định. Số sinh viên còn lại chia đều vào chỉ tiêu bổ sung. Hồ sơ trực tuyến được xếp trước hồ sơ chỉ có trong CSV khi đưa vào các mô hình.
+4. Dùng thanh ngưỡng bên phải để đọc kết quả từng sinh viên, so sánh điểm, tải và các chủ đề chuyên môn của từng giảng viên. Hai điểm đạt ngưỡng hiển thị mức cao, một điểm đạt hiển thị trung bình, còn lại hiển thị chưa đủ bằng chứng. Giao diện ghi riêng nếu hai mô hình đề xuất hai giảng viên khác nhau.
+5. Chọn phương án PPO hoặc DQN để công bố. Giảng viên thấy danh sách được phân công và thông tin liên hệ. Thu hồi ẩn danh sách khỏi giảng viên và sinh viên để khoa chỉnh sửa. Trạng thái khóa nguyện vọng vẫn có hiệu lực đến khi trưởng khoa chủ động mở lại.
+
+### Quy tắc chung
+
 1. Chọn danh sách giảng viên tham gia. Giảng viên đã nhận sinh viên bắt buộc có mặt.
 2. Tạo phương án. Mỗi giảng viên có chỉ tiêu bằng số sinh viên đã nhận cộng số chỗ chia đều từ nhóm còn lại.
 3. Đặt ngưỡng tin tưởng theo kỳ. Mặc định 70%. Điểm phù hợp bằng hoặc vượt ngưỡng hiển thị xanh với nhãn **Đạt ngưỡng tin tưởng**. Dưới ngưỡng hiển thị vàng với nhãn **Độ tin tưởng chưa cao**. Cặp thiếu điểm hiển thị vàng với nhãn **Chưa đủ dữ liệu**.

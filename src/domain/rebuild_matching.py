@@ -45,6 +45,7 @@ class AllocationProblem:
     preference_known: np.ndarray | None = None
     preference_weight: float = .1
     metadata: dict = field(default_factory=dict)
+    allow_unscored: bool = False
 
     def __post_init__(self):
         student_ids, advisor_ids = _ids(self.student_ids, 'student_ids'), _ids(self.advisor_ids, 'advisor_ids')
@@ -82,6 +83,8 @@ class AllocationProblem:
             raise ValueError('invalid_fixed_assignments')
         if not isinstance(self.metadata, dict):
             raise ValueError('invalid_metadata')
+        if type(self.allow_unscored) is not bool:
+            raise ValueError('invalid_unscored_policy')
         scores[~available], preferences[~preference_known], features[~feature_known] = 0, 0, 0
         for name, value in {'scores': scores, 'available': available, 'eligible': eligible,
                             'present': present, 'capacities': capacities,
@@ -96,7 +99,7 @@ class AllocationProblem:
 
     @property
     def allowed(self):
-        allowed = self.available & self.eligible & self.present[None, :]
+        allowed = (self.available | self.allow_unscored) & self.eligible & self.present[None, :]
         for student, advisor in self.fixed_assignments.items():
             i, j = self.student_ids.index(student), self.advisor_ids.index(advisor)
             allowed[i, :j] = False

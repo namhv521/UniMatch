@@ -15,6 +15,19 @@
 
 .thesis-workspace main { max-width: 1040px; margin: 0 auto; padding: 32px 5% 64px; }
 .thesis-heading { margin-bottom: 24px; }
+.thesis-workspace:has(.dean-layout) main { max-width: 1400px; }
+.dean-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 260px); gap: 20px; align-items: start; }
+.dean-main { min-width: 0; }
+.dean-threshold { position: sticky; top: 16px; padding: 20px; }
+.dean-threshold form { display: grid; gap: 10px; }
+.threshold-value { color: var(--blue); font-size: 1.7rem; font-variant-numeric: tabular-nums; }
+.confidence-key { display: grid; gap: 8px; list-style: none; padding: 12px 0 0; font-size: .8rem; }
+.thesis-confidence-low { background: #eef1f5; color: #394655; }
+@media (max-width: 820px) {
+  .dean-layout { display: flex; flex-direction: column; gap: 8px; }
+  .dean-threshold { position: static; order: -1; width: 100%; }
+  .dean-main { width: 100%; }
+}
 .profile-fields, .preference-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; margin-bottom: 18px; }
 .profile-fields label, .preference-fields label, .topic-field { display: grid; gap: 6px; font-size: .92rem; }
 .track-picker { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 205px), 1fr)); gap: 3px; }
