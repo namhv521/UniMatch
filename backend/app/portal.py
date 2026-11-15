@@ -112,6 +112,10 @@ def install_portal(app):
     app.state.portal_store = store
     app.state.portal_auth_start_rate_limiter = auth_start_rate_limiter()
     router = APIRouter()
+    from .thesis import install_thesis, role_for, role_roster
+    roster = role_roster()
+    legacy_coordinator = (os.environ.get('UNIMATCH_DEPLOYMENT') == 'production'
+                          and not roster and not os.environ.get('UNIMATCH_THESIS_SEMESTER', '').strip())
     origin = os.environ.get('UNIMATCH_PUBLIC_ORIGIN', 'http://127.0.0.1:8767').rstrip('/')
     parsed = urlparse(origin)
     if (parsed.scheme not in ('https', 'http') or not parsed.hostname or parsed.path
@@ -131,7 +135,7 @@ def install_portal(app):
         user = store.session(request.cookies.get(COOKIE))
         if user is None:
             raise HTTPException(401, 'login_required')
-        return user
+        return {**user, **({'role': 'dean'} if legacy_coordinator else role_for(user['id'], roster))}
 
     app.state.portal_authenticated = authenticated
 
@@ -218,7 +222,8 @@ def install_portal(app):
         if request.headers.get('authorization') and hasattr(app.state, 'rebuild_authorize'):
             app.state.rebuild_authorize(request)
         else:
-            authenticated(request)
+            if authenticated(request)['role'] != 'dean':
+                raise HTTPException(403, 'dean_required')
         if getattr(app.state,'semester_run',None) is not None:
             from src.serving.semester_service import semester_telemetry
             active=app.state.rebuild_get_service()
@@ -253,6 +258,7 @@ def install_portal(app):
                 'source': 'GitHub đã duyệt + hồ sơ giảng viên chính thức',
                 'production_promoted': False}
 
+    install_thesis(router, app, store, authenticated, check_origin)
     # Put exact endpoints before the frontend StaticFiles catch-all.
     old = list(app.router.routes)
     app.include_router(router)

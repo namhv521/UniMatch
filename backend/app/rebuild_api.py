@@ -54,7 +54,10 @@ def create_app(*, service=None, token=None, output=None, selection_manifest=None
             expected_origin = os.environ.get('UNIMATCH_PUBLIC_ORIGIN', '').rstrip('/') if production else str(request.base_url).rstrip('/')
             if origin and origin != expected_origin and origin not in origins:
                 raise HTTPException(403, detail='origin_not_allowed')
-            return app.state.portal_authenticated(request)['id']
+            user = app.state.portal_authenticated(request)
+            if request.url.path != '/api/rebuild/assistant' and user.get('role', 'student') != 'dean':
+                raise HTTPException(403, detail='dean_required')
+            return user['id']
         if production:
             raise HTTPException(401, detail='login_required')
         if not isinstance(configured_token, str) or len(configured_token) < 16 or not configured_token.strip():
@@ -109,6 +112,8 @@ def create_app(*, service=None, token=None, output=None, selection_manifest=None
         if not isinstance(value, dict):
             raise HTTPException(400, detail='json_object_required')
         return value
+
+    app.state.rebuild_read_body = body
 
     @app.exception_handler(ValueError)
     async def value_error(request, error):

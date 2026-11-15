@@ -2,6 +2,12 @@ const $ = id => document.getElementById(id);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const number = value => Number(value).toLocaleString('vi-VN', { maximumFractionDigits: 3 });
 
+export function confidenceLabel(score, threshold) {
+  const high = typeof score === 'number' && score * 100 >= threshold - 1e-9;
+  return `<span class="thesis-confidence ${high ? 'thesis-confidence-high' : 'thesis-confidence-review'}">${high ?
+    'Đạt ngưỡng tin tưởng' : score == null ? 'Chưa đủ dữ liệu' : 'Độ tin tưởng chưa cao'}</span>`;
+}
+
 export async function requireSession() {
   try {
     const response = await fetch('/api/auth/me', { credentials: 'same-origin', cache: 'no-store' });
@@ -89,12 +95,20 @@ wireLogout();
 if ($('auth-title')) await login();
 else if (document.body.classList.contains('landing-page')) {
   fetch('/api/auth/me', {credentials:'same-origin', cache:'no-store'})
-    .then(response => {
+    .then(async response => {
       if (!response.ok) return;
+      const user = await response.json();
+      if (user.role === 'dean') document.querySelectorAll('[data-dean]').forEach(element => { element.hidden = false; });
       document.querySelectorAll('[data-member]').forEach(element => { element.hidden = false; });
       document.querySelectorAll('[data-guest]').forEach(element => { element.hidden = true; });
     }).catch(() => {});
-} else if (!$('import-form')) { const user=await requireSession(); if(user && $('training-chart')) { await training(); $('refresh-training').addEventListener('click',training); } }
+} else if ($('training-chart')) {
+  const user = await requireSession();
+  if (user?.role === 'dean') {
+    await training();
+    $('refresh-training').addEventListener('click', training);
+  } else if (user) location.replace('./thesis.html');
+}
 const canvas = $('campus');
 if (canvas) {
   const toggle = $('motion-toggle');

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Khóa luận · UniMatch</title>
+  <link rel="stylesheet" href="./portal.css">
+</head>
+<body class="thesis-workspace">
+  <a class="skip-link" href="#main">Đi tới nội dung chính</a>
+  <header class="portal-nav">
+    <a class="brand" href="./landing.html"><span>Uni</span>Match</a>
+    <nav aria-label="Điều hướng">
+      <a href="./thesis.html" aria-current="page">Khóa luận</a>
+      <a href="./rebuild.html" data-dean hidden>So sánh mô hình</a>
+      <a href="./dashboard.html" data-dean hidden>Huấn luyện</a>
+    </nav>
+    <button class="secondary" data-logout>Đăng xuất</button>
+  </header>
+  <main id="main">
+    <header class="thesis-heading">
+      <h1 id="thesis-title">Khóa luận</h1>
+      <p id="thesis-period"></p>
+    </header>
+    <p id="thesis-status" role="status" tabindex="-1">Đang tải không gian khóa luận…</p>
+    <div id="thesis-content" aria-busy="true"></div>
+    <section id="thesis-chat" class="work-section" hidden aria-labelledby="thesis-chat-title">
+      <h2 id="thesis-chat-title">Hỏi trợ lý về giảng viên</h2>
+      <button type="button" class="secondary" id="fill-skill-question" hidden>Soạn câu hỏi từ hồ sơ kỹ năng</button>
+      <form id="thesis-chat-form" class="thesis-actions">
+        <label for="thesis-question">Câu hỏi về giảng viên hoặc chủ đề</label>
+        <input id="thesis-question" name="question" required maxlength="1000" placeholder="Giảng viên nào nghiên cứu về học máy?">
+        <button class="primary">Gửi câu hỏi</button>
+      </form>
+      <p id="thesis-chat-status" role="status"></p>
+      <div id="thesis-chat-history" aria-label="Hội thoại"></div>
+    </section>
+    <noscript>Bật JavaScript để sử dụng không gian khóa luận.</noscript>
+  </main>
+  <script type="module" src="./thesis.js"></script>
+</body>
+</html>

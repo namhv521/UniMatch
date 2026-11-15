@@ -11,6 +11,7 @@ def portal(tmp_path, monkeypatch):
     from backend.app.portal import install_portal
     monkeypatch.setenv('UNIMATCH_AUTH_DB', str(tmp_path / 'auth.sqlite3'))
     monkeypatch.setenv('UNIMATCH_PUBLIC_ORIGIN', 'http://testserver')
+    monkeypatch.setenv('UNIMATCH_ROLE_ROSTER', '{"github:1":{"role":"dean"}}')
     app = FastAPI()
     install_portal(app)
     return app, TestClient(app)
@@ -38,6 +39,7 @@ def test_shared_matching_entrypoint_has_portal_endpoints(tmp_path, monkeypatch):
 def test_browser_users_cannot_read_each_others_cohorts(service, tmp_path, monkeypatch):
     from backend.app.rebuild_api import create_app
     monkeypatch.setenv('UNIMATCH_AUTH_DB', str(tmp_path / 'auth.sqlite3'))
+    monkeypatch.setenv('UNIMATCH_ROLE_ROSTER', '{"github:one":{"role":"dean"},"github:two":{"role":"dean"}}')
     app = create_app(service=service, token='technical-fixture-long-token', frontend_dir=tmp_path)
     client = TestClient(app)
     client.cookies.set('unimatch_session', app.state.portal_store.create_session('github', 'one', 'A'))

@@ -25,3 +25,20 @@ CREATE TABLE IF NOT EXISTS advisors (
 CREATE TABLE IF NOT EXISTS model_bundles (
     bundle_key TEXT PRIMARY KEY, sha256 TEXT NOT NULL, payload BYTEA NOT NULL
 );
+CREATE TABLE IF NOT EXISTS thesis_semesters (
+    semester TEXT PRIMARY KEY, threshold INTEGER NOT NULL DEFAULT 70,
+    revision INTEGER NOT NULL DEFAULT 0, proposal TEXT, published TEXT
+);
+CREATE TABLE IF NOT EXISTS thesis_students (
+    semester TEXT NOT NULL REFERENCES thesis_semesters(semester),
+    user_id TEXT NOT NULL REFERENCES users(id), profile TEXT NOT NULL,
+    PRIMARY KEY (semester, user_id)
+);
+CREATE TABLE IF NOT EXISTS thesis_requests (
+    semester TEXT NOT NULL, user_id TEXT NOT NULL, advisor_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending','accepted','rejected','withdrawn')),
+    PRIMARY KEY (semester, user_id, advisor_id),
+    FOREIGN KEY (semester, user_id) REFERENCES thesis_students(semester, user_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS thesis_one_active_request
+    ON thesis_requests(semester, user_id) WHERE status IN ('pending','accepted');

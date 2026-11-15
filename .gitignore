@@ -44,5 +44,10 @@ debug.log
 .DS_Store
 Thumbs.db
 .superpowers/sdd/
-docs/
-tests/
+docs/*
+!docs/unimatch_web_prd.md
+!docs/unimatch_web_spec.md
+tests/*
+!tests/rebuild/
+tests/rebuild/*
+!tests/rebuild/test_thesis_portal.py

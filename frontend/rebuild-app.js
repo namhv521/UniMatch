@@ -1,4 +1,5 @@
-import { requireSession } from "./portal.js";
+import { confidenceLabel, requireSession } from "./portal.js";
+let confidenceThreshold = 70;
 import { balancedQuotas } from "./student-cohorts.js";
 
 const $ = (id) => document.getElementById(id);
@@ -234,7 +235,11 @@ function renderAssignments() {
     const count = counts.get(id) || 0;
     return quota ? `<li><span>${escape(nameAdvisor(id))}</span><meter min="0" max="${quota}" value="${count}" aria-label="${escape(nameAdvisor(id))}"></meter><span>${count}/${quota} SV</span></li>` : "";
   }).join("")}</ul></details>` : "";
-  $("assignments-table").innerHTML = rows.length ? `<table><caption>Đề xuất phân bổ · ${escape(labels[state.algorithm] || state.algorithm)}</caption><thead><tr><th>Sinh viên</th><th>Giảng viên</th><th class="number">Điểm phù hợp</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${escape(nameStudent(r.student_id))}<small>${escape(r.student_id)}</small></td><td>${escape(nameAdvisor(r.advisor_id))}${r.assignment_mode === "quota_only" ? "<small>Ghép theo quota còn lại</small>" : ""}</td><td class="number">${score(r.score ?? currentResult().trace?.find((t) => t.student_id === r.student_id)?.score)}</td></tr>`).join("")}</tbody></table>` : `<p class="empty-state">Thuật toán chưa tạo được phân bổ hợp lệ. Xem chẩn đoán ở bảng so sánh.</p>`; updateControls();
+  $("assignments-table").innerHTML = rows.length ? `<table><caption>Đề xuất phân bổ · ${escape(labels[state.algorithm] || state.algorithm)} · Ngưỡng ${confidenceThreshold}%</caption><thead><tr><th>Sinh viên</th><th>Giảng viên</th><th class="number">Điểm phù hợp</th><th>Theo ngưỡng</th></tr></thead><tbody>${rows.map((r) => {
+    const trace = currentResult().trace?.find(t => t.student_id === r.student_id);
+    const pairScore = r.assignment_mode === "quota_only" ? null : r.score ?? (trace?.score_known ? trace.score : null);
+    return `<tr><td>${escape(nameStudent(r.student_id))}<small>${escape(r.student_id)}</small></td><td>${escape(nameAdvisor(r.advisor_id))}${r.assignment_mode === "quota_only" ? "<small>Ghép theo quota còn lại</small>" : ""}</td><td class="number">${score(pairScore)}</td><td>${confidenceLabel(pairScore, confidenceThreshold)}</td></tr>`;
+  }).join("")}</tbody></table>` : `<p class="empty-state">Thuật toán chưa tạo được phân bổ hợp lệ. Xem chẩn đoán ở bảng so sánh.</p>`; updateControls();
 }
 
 function stop() { clearInterval(timer); state.playing = false; if ($("play")) $("play").textContent = "Phát"; }
@@ -454,4 +459,12 @@ for (const button of chatSuggestions) {
 }
 updateControls(); renderReplay();
 const user=await requireSession();
-if(user){$("user-greeting").textContent=`Chào ${user.name}`;await connect();openChatFromHash();}
+if (user?.role === 'dean') {
+  $("user-greeting").textContent = `Chào ${user.name}`;
+  try {
+    const response = await fetch("/api/thesis", { cache: "no-store" });
+    if (response.ok) confidenceThreshold = (await response.json()).threshold;
+  } catch { /* The comparison page uses the default when the term is unavailable. */ }
+  await connect();
+  openChatFromHash();
+} else if (user) location.replace("./thesis.html");
