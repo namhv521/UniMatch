@@ -8,21 +8,23 @@
 </head>
 <body class="thesis-workspace">
   <a class="skip-link" href="#main">Đi tới nội dung chính</a>
-  <header class="portal-nav">
+  <header class="portal-nav workspace-nav">
     <a class="brand" href="./landing.html"><span>Uni</span>Match</a>
     <nav aria-label="Điều hướng">
       <a href="./thesis.html" aria-current="page">Khóa luận</a>
-      <a href="#thesis-chat" data-student hidden>Trợ lý</a>
-      <a href="./rebuild.html" data-dean hidden>So sánh mô hình</a>
-      <a href="./dashboard.html" data-dean hidden>Huấn luyện</a>
+      <a href="./rebuild.html" data-dean hidden>Phân công</a>
+      <a href="./dashboard.html" data-dean hidden>Dashboard</a>
     </nav>
     <button class="secondary" data-logout>Đăng xuất</button>
   </header>
   <main id="main">
-    <header class="thesis-heading">
+    <header class="thesis-heading workspace-hero">
       <h1 id="thesis-title">Khóa luận</h1>
       <p id="thesis-period"></p>
     </header>
+    <nav class="workspace-jump" aria-label="Các phần khóa luận" data-student hidden>
+      <a href="#thesis-chat">Trợ lý</a>
+    </nav>
     <p id="thesis-status" role="status" tabindex="-1">Đang tải không gian khóa luận…</p>
     <div id="thesis-content" aria-busy="true"></div>
     <section id="thesis-chat" class="work-section" hidden aria-labelledby="thesis-chat-title">
