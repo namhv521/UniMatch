@@ -5,7 +5,7 @@ import { mountReplay } from "./allocation-replay.js";
 
 const $ = (id) => document.getElementById(id);
 const escape = (value = "") => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const labels = { ppo: "PPO", dqn: "DQN", hungarian: "Hungarian · baseline", greedy: "Greedy", random: "Random" };
+const labels = { ppo: "PPO", dqn: "DQN", hungarian: "Hungarian", greedy: "Greedy", random: "Random" };
 const state = { bootstrap: null, base: "", token: "", selected: new Set(), cohort: null, file: null, comparison: null, recommendation: null, algorithm: "ppo", busy: false, revision: 0, quotaVerified: false };
 let stop = () => {};
 let previewedWorkbook;
