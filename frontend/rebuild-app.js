@@ -86,18 +86,20 @@ async function connect() {
   try {
     state.base = "";
     state.bootstrap = await api("/bootstrap");
-    const retrospective = state.bootstrap.versions?.scope === 'retrospective_document_proxy';
     const versions = state.bootstrap.checkpoint_versions || [];
     $("checkpoint-field").hidden = !versions.length;
     $("checkpoint-version").replaceChildren(...versions.map(v => new Option(`${v} · vòng cuối`, v)));
     if (versions.includes("V3")) $("checkpoint-version").value = "V3";
-    const models = new Map((state.bootstrap.algorithms || []).map(model => [model.id, model]));
-    const rlDescription = retrospective ? 'Mô hình nghiên cứu · tài liệu hồi cứu' : 'Học tăng cường · dữ liệu nguồn đã duyệt';
-    $("model-status").innerHTML = ["ppo", "dqn", "hungarian"].filter(id => models.has(id)).map(id => {
-      const {ready} = models.get(id);
-      const description = id === "hungarian" ? "Tối ưu tổng điểm theo chỉ tiêu" : rlDescription;
-      return `<div class="model-row"><b>${labels[id]}</b><small>${description}</small><span class="${ready ? 'status-good' : 'status-warn'}">${ready ? 'Sẵn sàng' : 'Chưa khả dụng'}</span></div>`;
-    }).join('');
+    const descriptions = {
+      ppo: "Dùng chính sách đã học để ước tính xác suất chọn từng giảng viên hợp lệ, rồi chọn người có xác suất cao nhất ở mỗi bước.",
+      dqn: "Ước tính phần thưởng tích lũy nếu chọn từng giảng viên hợp lệ, rồi chọn người có giá trị dự đoán cao nhất ở mỗi bước.",
+      hungarian: "Xét đồng thời các cặp sinh viên–giảng viên để tối đa hóa tổng điểm phù hợp trong giới hạn chỉ tiêu."
+    };
+    const availableModels = new Set((state.bootstrap.algorithms || []).map(model => model.id));
+    $("model-status").innerHTML = Object.entries(descriptions)
+      .filter(([id]) => availableModels.has(id))
+      .map(([id, description]) => `<div class="model-row"><b>${labels[id]}</b><small>${description}</small></div>`)
+      .join("");
     renderAdvisors(); renderQuota(); message("");
   } catch(error) {
     message(errorMessage(error), "error");
