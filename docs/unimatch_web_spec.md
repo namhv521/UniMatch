@@ -96,6 +96,13 @@ Ngưỡng là số nguyên 0–100, áp dụng điều kiện `100 × E4 ≥ thr
 | `POST /api/thesis/publish` | Trưởng khoa | `id` của phương án |
 | `POST /api/rebuild/assistant` | Sinh viên | `question`, có thể kèm `previous_question` |
 
+## Khởi động Render sau khi ngủ
+
+- Kiến trúc hiện tại phục vụ cả HTML và API từ Render Web Service. Máy Free có thể ngủ sau 15 phút không có truy cập. Khi máy ngủ, Render cung cấp trang chờ trước khi JavaScript của UniMatch có thể chạy.
+- Workflow `.github/workflows/keepalive.yml` kiểm tra `/health` theo lịch 10 phút. Kiểm tra thành công yêu cầu HTTP 200, nội dung JSON và `status=ready`. Log ghi thời gian phản hồi để phân biệt lượt kiểm tra nhanh với lượt phải đánh thức máy. GitHub Actions có thể trễ hoặc bỏ lần chạy định kỳ.
+- Muốn giữ URL Render hiện tại và tránh ngủ do không có truy cập, dùng compute trả phí của cùng Web Service. Đo mức sử dụng CPU, RAM và thời gian phân bổ trước khi chọn cấu hình. Cấu hình OAuth và model bundle tiếp tục dùng cùng origin.
+- Nếu giữ compute Free, có thể phát hành HTML/CSS/JS qua CDN tĩnh và proxy `/api/*` về origin Render hiện tại. Giao diện mở ngay, còn dữ liệu và suy luận có thể chờ API. Trước khi chuyển người dùng, đối chiếu đích proxy, origin công khai, cookie và callback của từng nhà cung cấp OAuth. Chỉ coi HTTP 401 là phiên đã hết hạn. Phản hồi 502/503/504 hoặc HTML từ gateway cần trạng thái đang kết nối, với kiểm tra readiness và chỉ tự thử lại truy vấn đọc.
+
 ## Kiểm tra tích hợp
 
 Chạy `python -m pytest -q tests/rebuild/test_thesis_portal.py tests/rebuild/test_portal.py tests/rebuild/test_phase7_api.py tests/rebuild/test_phase8_api.py` ở gốc repo. Kiểm tra gói frontend bằng `npm --prefix frontend run check` và `npm --prefix frontend run build`. Khi triển khai, cấu hình đúng kỳ, OAuth, danh sách tài khoản và artifact trước khi thử một lượt đăng ký, duyệt và công bố bằng dữ liệu thử.
