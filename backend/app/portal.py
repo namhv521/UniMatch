@@ -124,18 +124,10 @@ def install_portal(app):
             or parsed.scheme == 'http' and parsed.hostname not in ('127.0.0.1', 'localhost', '::1', 'testserver')):
         raise ValueError('https_public_origin_or_loopback_required')
     secure = parsed.scheme == 'https'
-    frontend_origin = os.environ.get('UNIMATCH_FRONTEND_ORIGIN', '').rstrip('/')
-    if frontend_origin:
-        frontend = urlparse(frontend_origin)
-        if (frontend.scheme != 'https' or not frontend.hostname or frontend.path or frontend.query
-                or frontend.fragment or frontend.username or frontend.password):
-            raise ValueError('invalid_frontend_origin')
-    public_origins = {origin} | ({frontend_origin} if frontend_origin else set())
-    app.state.portal_public_origins = public_origins
 
     def check_origin(request):
         # Browsers send Origin for fetch POST; no cross-site state changes.
-        if request.headers.get('origin') not in public_origins | {None}:
+        if request.headers.get('origin') not in (None, origin):
             raise HTTPException(403, 'origin_not_allowed')
         if request.headers.get('sec-fetch-site') == 'cross-site':
             raise HTTPException(403, 'origin_not_allowed')
@@ -167,8 +159,7 @@ def install_portal(app):
 
     @router.get('/api/auth/config')
     def config():
-        return {'providers': {key: provider_ready(key) for key in PROVIDERS},
-                'oauth_origin': origin if frontend_origin else None}
+        return {'providers': {key: provider_ready(key) for key in PROVIDERS}}
 
     @router.get('/api/auth/me')
     def me(request: Request):
@@ -186,8 +177,6 @@ def install_portal(app):
     @router.post('/api/auth/start/{provider}')
     async def start(provider: str, request: Request):
         check_origin(request)
-        if request.headers.get('origin') not in (None, origin):
-            raise HTTPException(403, 'oauth_requires_primary_origin')
         if provider not in PROVIDERS or not provider_ready(provider):
             raise HTTPException(503, 'social_login_not_configured')
         client_ip = request.client.host if request.client else 'unknown'

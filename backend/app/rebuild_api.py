@@ -51,8 +51,8 @@ def create_app(*, service=None, token=None, output=None, selection_manifest=None
             if request.method != 'GET' and request.headers.get('sec-fetch-site') == 'cross-site':
                 raise HTTPException(403, detail='origin_not_allowed')
             origin = request.headers.get('origin')
-            browser_origins = app.state.portal_public_origins if production else {str(request.base_url).rstrip('/')}
-            if origin and origin not in browser_origins and origin not in origins:
+            expected_origin = os.environ.get('UNIMATCH_PUBLIC_ORIGIN', '').rstrip('/') if production else str(request.base_url).rstrip('/')
+            if origin and origin != expected_origin and origin not in origins:
                 raise HTTPException(403, detail='origin_not_allowed')
             user = app.state.portal_authenticated(request)
             is_assistant = request.url.path == '/api/rebuild/assistant'

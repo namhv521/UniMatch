@@ -15,8 +15,6 @@
 
 .thesis-workspace main { max-width: 1040px; margin: 0 auto; padding: 32px 5% 64px; }
 .thesis-heading { margin-bottom: 24px; }
-.portal-connection { width: min(92%, 960px); margin: 12px auto; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); color: var(--ink); }
-.portal-connection button, #auth-notice button { margin-inline-start: 6px; }
 .allocation-player-controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
 .allocation-player-controls label { display: grid; gap: 4px; flex: 1 1 155px; min-width: 0; font-size: .88rem; }
 .allocation-player-controls select { width: 100%; }

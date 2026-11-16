@@ -101,9 +101,7 @@ Ngưỡng là số nguyên 0–100, áp dụng điều kiện `100 × E4 ≥ thr
 - Kiến trúc hiện tại phục vụ cả HTML và API từ Render Web Service. Máy Free có thể ngủ sau 15 phút không có truy cập. Khi máy ngủ, Render cung cấp trang chờ trước khi JavaScript của UniMatch có thể chạy.
 - Workflow `.github/workflows/keepalive.yml` kiểm tra `/health` theo lịch 10 phút. Kiểm tra thành công yêu cầu HTTP 200, nội dung JSON và `status=ready`. Log ghi thời gian phản hồi để phân biệt lượt kiểm tra nhanh với lượt phải đánh thức máy. GitHub Actions có thể trễ hoặc bỏ lần chạy định kỳ.
 - Muốn giữ URL Render hiện tại và tránh ngủ do không có truy cập, dùng compute trả phí của cùng Web Service. Đo mức sử dụng CPU, RAM và thời gian phân bổ trước khi chọn cấu hình. Cấu hình OAuth và model bundle tiếp tục dùng cùng origin.
-- Nếu giữ compute Free, có thể phát hành HTML/CSS/JS qua CDN tĩnh và proxy `/api/*` về origin Render hiện tại. Giao diện mở ngay, còn dữ liệu và suy luận có thể chờ API. Trước khi chuyển người dùng, đối chiếu đích proxy, origin công khai, cookie và callback của từng nhà cung cấp OAuth. Chỉ coi HTTP 401 là phiên đã hết hạn. Phản hồi 502/503/504 hoặc HTML từ gateway cần trạng thái đang kết nối, với kiểm tra readiness và chỉ tự thử lại truy vấn đọc.
-- Cấu hình Vercel dùng thư mục gốc `frontend`, lệnh `npm run build` và đầu ra `dist`. Rewrite `/api/*` trỏ về `https://unimatch-portal.onrender.com`. Điền chính xác origin production của Vercel vào `UNIMATCH_FRONTEND_ORIGIN` trên Render. Giữ `UNIMATCH_PUBLIC_ORIGIN` là địa chỉ Render dành cho các callback OAuth đã đăng ký.
-- Đăng nhập email ở Vercel dùng cookie riêng theo hostname. Các nút OAuth chuyển thành liên kết đến trang đăng nhập Render. Hai địa chỉ có phiên trình duyệt riêng, cùng đọc tài khoản và dữ liệu trong PostgreSQL.
+- Production dùng cùng một origin `https://unimatch-portal.onrender.com` cho giao diện, API và callback đăng nhập. Project Vercel đã dừng phục vụ production.
 
 ## Kiểm tra tích hợp
 
