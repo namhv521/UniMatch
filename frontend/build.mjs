@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 process.chdir(fileURLToPath(new URL('.', import.meta.url)));
 
 if (process.env.VERCEL === '1') {
-  const backend = new URL(process.env.UNIMATCH_API_ORIGIN || '');
+  const backend = new URL(process.env.UNIMATCH_API_ORIGIN || 'https://unimatch-portal.onrender.com');
   const config = JSON.parse(await readFile('vercel.json', 'utf8'));
   if (backend.protocol !== 'https:' || backend.username || backend.password || backend.pathname !== '/' || backend.search || backend.hash ||
       !config.rewrites?.some(route => route.source === '/api/:path*' && route.destination === `${backend.origin}/api/:path*`)) {

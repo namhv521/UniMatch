@@ -6,6 +6,30 @@ from fastapi.testclient import TestClient
 from test_phase7_service import service
 
 
+def test_static_frontend_origin_keeps_email_sessions_and_primary_oauth(tmp_path, monkeypatch):
+    from backend.app.portal import install_portal
+
+    primary = 'https://origin.test'
+    frontend = 'https://frontend.test'
+    monkeypatch.setenv('UNIMATCH_AUTH_DB', str(tmp_path / 'portal.sqlite3'))
+    monkeypatch.setenv('UNIMATCH_PUBLIC_ORIGIN', primary)
+    monkeypatch.setenv('UNIMATCH_FRONTEND_ORIGIN', frontend)
+    app = FastAPI()
+    install_portal(app)
+    with TestClient(app, base_url=frontend) as client:
+        assert client.get('/api/auth/config').json()['oauth_origin'] == primary
+        payload = {'email': 'student@example.test', 'name': 'Student', 'password': 'test-password-123'}
+        path = '/api/auth/email/register'
+        assert client.post(path, headers={'Origin': 'https://other.test'}, json=payload).status_code == 403
+        signup = client.post(path, headers={'Origin': frontend}, json=payload)
+        assert signup.status_code == 200
+        assert 'Secure' in signup.headers['set-cookie'] and 'Domain=' not in signup.headers['set-cookie']
+        assert client.get('/api/auth/me').json()['role'] == 'student'
+        assert client.post('/api/auth/start/github', headers={'Origin': frontend}).json()['detail'] == 'oauth_requires_primary_origin'
+        assert client.post('/api/auth/logout', headers={'Origin': frontend}).status_code == 200
+        assert client.get('/api/auth/me').status_code == 401
+
+
 def test_dean_csv_intake_locks_preferences_and_revokes_publication(service, tmp_path, monkeypatch):
     from backend.app.rebuild_api import create_app
     from backend.app import thesis

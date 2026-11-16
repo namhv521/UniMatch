@@ -8,12 +8,65 @@ export function confidenceLabel(score, threshold) {
     'Đạt ngưỡng tin tưởng' : score == null ? 'Chưa đủ dữ liệu' : 'Độ tin tưởng chưa cao'}</span>`;
 }
 
-export async function requireSession() {
+async function readWhenReady(path, onWait = () => {}) {
+  const startNotice = setTimeout(onWait, 700);
   try {
-    const response = await fetch('/api/auth/me', { credentials: 'same-origin', cache: 'no-store' });
-    if (!response.ok) { location.replace('./login.html'); return null; }
-    return await response.json();
-  } catch { document.body.insertAdjacentHTML('afterbegin', '<p role="alert">Không kết nối được dịch vụ. Hãy tải lại trang.</p>'); return null; }
+    for (let attempt = 0; attempt < 7; attempt++) {
+      let response;
+      try {
+        response = await fetch(path, {credentials: 'same-origin', cache: 'no-store',
+          headers: {Accept: 'application/json'}, signal: AbortSignal.timeout(12000)});
+      } catch { /* An unavailable upstream can recover on the next read. */ }
+      if (response && response.status < 500 && response.headers.get('content-type')?.includes('application/json')) {
+        return response;
+      }
+      onWait();
+      if (attempt < 6) await new Promise(resolve => setTimeout(resolve, 2000 + attempt * 500));
+    }
+    throw new Error('service_unavailable');
+  } finally {
+    clearTimeout(startNotice);
+  }
+}
+
+function connectionStatus() {
+  const box = document.createElement('div');
+  box.className = 'portal-connection';
+  box.setAttribute('role', 'status');
+  box.hidden = true;
+  document.querySelector('main').before(box);
+  return box;
+}
+
+function showConnecting(box) {
+  box.hidden = false;
+  box.textContent = 'Đang kết nối máy chủ UniMatch. Trang sẽ tự cập nhật khi dịch vụ sẵn sàng.';
+}
+
+function showRetry(box) {
+  box.hidden = false;
+  box.textContent = 'Máy chủ chưa phản hồi. ';
+  const button = document.createElement('button');
+  button.className = 'secondary';
+  button.type = 'button';
+  button.textContent = 'Kết nối lại';
+  button.addEventListener('click', () => location.reload());
+  box.append(button);
+}
+
+export async function requireSession() {
+  const status = connectionStatus();
+  try {
+    const response = await readWhenReady('/api/auth/me', () => showConnecting(status));
+    if (response.status === 401) { location.replace('./login.html'); return null; }
+    if (!response.ok) throw new Error('session_unavailable');
+    const user = await response.json();
+    status.remove();
+    return user;
+  } catch {
+    showRetry(status);
+    return null;
+  }
 }
 
 export function wireLogout() {
@@ -25,16 +78,16 @@ export function wireLogout() {
 }
 
 async function login() {
-  try {
-    if ((await fetch('/api/auth/me')).ok) { location.replace('./landing.html'); return; }
-  } catch { $('auth-notice').textContent='Không kết nối được dịch vụ đăng nhập. Kiểm tra mạng và tải lại trang.'; return; }
   let config;
   const buttons = [...document.querySelectorAll('[data-provider]')];
-  function availability() { buttons.forEach(button => { button.disabled = !config?.providers[button.dataset.provider]; }); }
+  let remoteOAuth = false;
+  function availability() { buttons.forEach(button => { button.disabled = remoteOAuth || !config?.providers[button.dataset.provider]; }); }
   const form = $('email-auth-form');
   const submit = $('email-auth-submit');
   const activate = $('email-activate');
   const authStatus = $('auth-status');
+  const connection = $('auth-notice');
+  submit.disabled = true;
   let mode = 'login';
 
   function setMode(next) {
@@ -61,6 +114,7 @@ async function login() {
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
+    if (submit.disabled) return;
     const {email, password, name, activation_code, new_password} = Object.fromEntries(new FormData(form));
     const body = {email, password, ...(mode === 'register' && {name}), ...(mode === 'activate' && {activation_code, new_password})};
     const messages = {
@@ -106,9 +160,24 @@ async function login() {
   if (new URLSearchParams(location.search).get('mode') === 'register') $('register-tab').click();
   if (new URLSearchParams(location.search).has('error')) $('auth-status').textContent = 'Đăng nhập chưa hoàn tất. Hãy xác minh lại và thử lần nữa.';
   try {
-    const response = await fetch('/api/auth/config'); if (!response.ok) throw new Error(); config = await response.json();
+    const session = await readWhenReady('/api/auth/me', () => showConnecting(connection));
+    if (session.ok) { location.replace('./landing.html'); return; }
+    if (session.status !== 401) throw new Error('session_unavailable');
+    const response = await readWhenReady('/api/auth/config', () => showConnecting(connection));
+    if (!response.ok) throw new Error();
+    config = await response.json();
+    submit.disabled = false;
+    remoteOAuth = Boolean(config.oauth_origin && config.oauth_origin !== location.origin);
     const missing = Object.entries(config.providers).filter(([,ready]) => !ready).map(([provider]) => ({google:'Google',github:'GitHub',facebook:'Facebook'}[provider]));
-    $('auth-notice').textContent = missing.length ? `${missing.join(', ')} hiện chưa khả dụng.` : '';
+    connection.textContent = remoteOAuth ? 'Đăng nhập bằng mạng xã hội tại ' : missing.length ? `${missing.join(', ')} hiện chưa khả dụng.` : '';
+    if (remoteOAuth) {
+      const primary = document.createElement('a');
+      primary.href = new URL('/login.html', config.oauth_origin).href;
+      primary.textContent = 'địa chỉ Render';
+      connection.append(primary, '.');
+      document.querySelector('.social-buttons').hidden = true;
+      document.querySelector('.auth-divider').hidden = true;
+    }
     availability();
     buttons.forEach(button => button.addEventListener('click', async () => {
       buttons.forEach(item => {item.disabled=true;}); $('auth-status').textContent='Đang chuyển đến dịch vụ đăng nhập…';
@@ -118,7 +187,7 @@ async function login() {
         const url = new URL(result.url); if (!['accounts.google.com','github.com','www.facebook.com'].includes(url.hostname) || url.protocol !== 'https:') throw new Error(); location.assign(url.href);
       } catch { availability(); $('auth-status').textContent='Không thể bắt đầu đăng nhập. Hãy thử lại sau ít phút.'; }
     }));
-  } catch { $('auth-notice').textContent='Không tải được cấu hình đăng nhập. Kiểm tra dịch vụ và tải lại trang.'; }
+  } catch { showRetry(connection); }
 }
 
 async function training() {
@@ -157,14 +226,17 @@ async function training() {
 wireLogout();
 if ($('auth-title')) await login();
 else if (document.body.classList.contains('landing-page')) {
-  fetch('/api/auth/me', {credentials:'same-origin', cache:'no-store'})
+  const connection = connectionStatus();
+  readWhenReady('/api/auth/me', () => showConnecting(connection))
     .then(async response => {
-      if (!response.ok) return;
+      if (response.status === 401) { connection.remove(); return; }
+      if (!response.ok) throw new Error('session_unavailable');
       const user = await response.json();
+      connection.remove();
       if (user.role === 'dean') document.querySelectorAll('[data-dean]').forEach(element => { element.hidden = false; });
       document.querySelectorAll('[data-member]').forEach(element => { element.hidden = false; });
       document.querySelectorAll('[data-guest]').forEach(element => { element.hidden = true; });
-    }).catch(() => {});
+    }).catch(() => showRetry(connection));
 } else if ($('training-chart')) {
   const user = await requireSession();
   if (user?.role === 'dean') {
