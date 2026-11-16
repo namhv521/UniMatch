@@ -251,14 +251,17 @@ def install_thesis(router, app, store, authenticated, check_origin):
             submitted_ids = ({row['user_id'] for row in db.execute(
                 'SELECT user_id FROM thesis_students WHERE semester=?', (semester,)).fetchall()} & roster.keys()
                 if roster is not None else set())
+            proposal = json.loads(state['proposal']) if state['proposal'] else None
+            manual = proposal.pop('manual', None) if proposal else None
             return {**result, 'student_count': len(roster) if roster is not None else count['total'],
+                    'manual': manual,
                     'roster_loaded': roster is not None,
                     'submitted_count': len(submitted_ids) if roster is not None else count['total'],
                     'roster_preview': [{'student_id': row['student_id'], 'name': row['name'], 'submitted': uid in submitted_ids}
                                        for uid, row in (roster or {}).items()],
                     'pending_count': sum(r['status'] == 'pending' for r in requests),
                     'published_algorithm': published.get('algorithm') if published else None,
-                    'proposal': json.loads(state['proposal']) if state['proposal'] else published,
+                    'proposal': proposal or (published if published and published.get('algorithm') != 'manual' else None),
                     'accepted_counts': dict(accepted), 'accepted_advisors': sorted(accepted)}
 
     @router.get('/api/thesis/catalog')
@@ -284,7 +287,7 @@ def install_thesis(router, app, store, authenticated, check_origin):
 
     def mutate(action, request, payload):
         role = {'assessment': 'student', 'choice': 'student', 'topic': 'student', 'contact': 'student', 'decision': 'faculty',
-                'threshold': 'dean', 'proposal': 'dean', 'publish': 'dean', 'roster': 'dean',
+                'threshold': 'dean', 'proposal': 'dean', 'manual': 'dean', 'publish': 'dean', 'roster': 'dean',
                 'close': 'dean', 'reopen': 'dean', 'revoke': 'dean'}[action]
         user = require(request, role)
         if action == 'contact':
@@ -296,7 +299,7 @@ def install_thesis(router, app, store, authenticated, check_origin):
         if action == 'choice' and not ('advisor_ids' in payload or 'advisor_id' in payload):
             raise HTTPException(422, 'invalid_advisor_selection')
         advisor_ids = payload.get('advisor_ids', [] if payload.get('advisor_id') is None else [payload['advisor_id']])
-        active = active_service() if action == 'proposal' or action == 'choice' and advisor_ids else None
+        active = active_service() if action in ('proposal', 'manual') or action == 'choice' and advisor_ids else None
         replacement = read_roster(payload.get('csv_text')) if action == 'roster' else None
         with term(write=True, allow_published=action == 'revoke') as (db, state):
             roster, closed = load_intake(db, semester)
@@ -309,6 +312,8 @@ def install_thesis(router, app, store, authenticated, check_origin):
                     raise HTTPException(409, 'semester_not_published')
                 db.execute('UPDATE thesis_semesters SET published=NULL WHERE semester=?', (semester,))
                 return {'ok': True}
+            saved = json.loads(state['proposal']) if state['proposal'] else {}
+            manual = saved.pop('manual', None)
             if action == 'roster':
                 db.execute('INSERT INTO thesis_intake(semester,roster) VALUES (?,?) '
                            'ON CONFLICT(semester) DO UPDATE SET roster=excluded.roster',
@@ -351,6 +356,24 @@ def install_thesis(router, app, store, authenticated, check_origin):
                     raise HTTPException(422, 'invalid_threshold')
                 db.execute('UPDATE thesis_semesters SET threshold=? WHERE semester=?', (threshold, semester))
                 return {'threshold': threshold}
+            elif action == 'manual':
+                if roster is None:
+                    raise HTTPException(409, 'semester_roster_required')
+                if payload.get('id') != (manual['id'] if manual else None):
+                    raise HTTPException(409, 'stale_manual_assignment')
+                choices = payload.get('assignments')
+                advisors = {a['advisor_id']: a for a in advisor_catalog(active)}
+                student_ids = {row['student_id']: uid for uid, row in roster.items()}
+                if (not isinstance(choices, dict) or not choices.keys() <= student_ids.keys()
+                        or any(not isinstance(a, str) or a not in advisors for a in choices.values())):
+                    raise HTTPException(422, 'invalid_manual_assignment')
+                rows = [{**advisors[choices[row['student_id']]], 'user_id': uid,
+                         'student_id': row['student_id'], 'student_name': row['name']}
+                        for uid, row in roster.items() if row['student_id'] in choices]
+                manual = {'id': uuid4().hex, 'algorithm': 'manual', 'assignments': rows}
+                db.execute('UPDATE thesis_semesters SET proposal=? WHERE semester=?',
+                           (json.dumps({**saved, 'manual': manual}, ensure_ascii=False), semester))
+                return {'ok': True}
             elif action == 'proposal':
                 selected = payload.get('advisor_ids')
                 if (not isinstance(selected, list) or not selected or len(selected) > len(active.advisor_ids)
@@ -370,10 +393,19 @@ def install_thesis(router, app, store, authenticated, check_origin):
                     topics = {r['user_id']: r['topic_description'] or '' for r in requests if r['rank'] is not None}
                     proposal = compare_models(active, semester_students(roster, students, topics), requests, selected)
                 db.execute('UPDATE thesis_semesters SET proposal=? WHERE semester=?',
-                           (json.dumps(proposal, ensure_ascii=False), semester))
+                           (json.dumps({**proposal, 'manual': manual}, ensure_ascii=False), semester))
                 return proposal
             elif action == 'publish':
-                proposal = json.loads(state['proposal']) if state['proposal'] else None
+                if payload.get('algorithm') == 'manual':
+                    if not closed:
+                        raise HTTPException(409, 'close_preferences_first')
+                    if (not manual or manual['id'] != payload.get('id')
+                            or {r['user_id'] for r in manual['assignments']} != set(roster or {})):
+                        raise HTTPException(409, 'incomplete_manual_assignment')
+                    db.execute('UPDATE thesis_semesters SET published=? WHERE semester=?',
+                               (json.dumps(manual, ensure_ascii=False), semester))
+                    return {'ok': True}
+                proposal = saved
                 if not proposal or proposal['id'] != payload.get('id') or proposal['status'] != 'feasible':
                     raise HTTPException(409, 'stale_or_infeasible_proposal')
                 if proposal.get('results'):
@@ -386,7 +418,8 @@ def install_thesis(router, app, store, authenticated, check_origin):
                 db.execute('UPDATE thesis_semesters SET published=? WHERE semester=?',
                            (json.dumps(published, ensure_ascii=False), semester))
                 return {'ok': True}
-            db.execute('UPDATE thesis_semesters SET proposal=NULL WHERE semester=?', (semester,))
+            retained = json.dumps({'manual': manual}, ensure_ascii=False) if manual and action != 'roster' else None
+            db.execute('UPDATE thesis_semesters SET proposal=? WHERE semester=?', (retained, semester))
         return {'ok': True}
 
     def topic_text(payload, previous=''):
@@ -431,7 +464,7 @@ def install_thesis(router, app, store, authenticated, check_origin):
     @router.post('/api/thesis/{action}')
     async def change(action: str, request: Request):
         if action not in {'assessment', 'choice', 'topic', 'contact', 'decision', 'threshold', 'proposal', 'publish',
-                          'roster', 'close', 'reopen', 'revoke'}:
+                          'roster', 'close', 'reopen', 'revoke', 'manual'}:
             raise HTTPException(404, 'unknown_thesis_action')
         check_origin(request)
         payload = await app.state.rebuild_read_body(request)

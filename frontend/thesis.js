@@ -35,6 +35,9 @@ const errors = {
   invalid_contact: 'Nhập số điện thoại hợp lệ để giảng viên có thể liên hệ.',
   invalid_email: 'Nhập địa chỉ email liên hệ hợp lệ.',
   invalid_registration_count: 'Cần từ 1 đến 1.000 sinh viên đã đăng ký để tạo phương án.',
+  stale_manual_assignment: 'Bản phân công thủ công đã thay đổi. Tải lại trang rồi chỉnh tiếp.',
+  invalid_manual_assignment: 'Có sinh viên hoặc giảng viên không hợp lệ. Tải lại danh sách rồi thử lại.',
+  incomplete_manual_assignment: 'Hãy tải lại trang và lưu đủ phân công cho mọi sinh viên trước khi công bố.',
   stale_or_infeasible_proposal: 'Phương án đã thay đổi hoặc không khả thi. Hãy tạo lại trước khi công bố.',
   role_required: 'Tài khoản hiện tại không có quyền thực hiện thao tác này.',
   invalid_roster_csv: 'Không đọc được CSV. Hãy lưu lại dưới dạng CSV UTF-8.',
@@ -205,6 +208,38 @@ function contactTable(rows, empty) {
     </tbody></table></div>` : `<p>${empty}</p>`;
 }
 
+let manualDirty = false;
+
+function manualAllocation() {
+  if (!state.roster_loaded || (state.published && state.published_algorithm !== 'manual')) return '';
+  const manual = state.manual;
+  const rows = manual?.assignments ?? [];
+  const assigned = new Map(rows.map(row => [row.student_id, row.advisor_id]));
+  const table = body => `<div class="table-scroll" tabindex="0" role="region" aria-label="Danh sách phân công thủ công">
+    <table><thead><tr><th scope="col">Sinh viên</th><th scope="col">Giảng viên hướng dẫn</th></tr></thead>
+    <tbody>${body}</tbody></table></div>`;
+  return `<section class="work-section" aria-labelledby="manual-allocation-title">
+    <h2 id="manual-allocation-title">Phân công thủ công</h2>
+    ${state.published ? table(rows.map(row => `<tr><th scope="row">${esc(row.student_name)} · ${esc(row.student_id)}</th><td>${esc(row.advisor_name)}</td></tr>`).join('')) :
+      `<p>Chỉ định giảng viên trực tiếp cho từng sinh viên trong CSV. Lựa chọn thủ công có thể vượt chỉ tiêu và thay đổi quyết định nhận hướng dẫn trước đó.</p>
+      <p class="help">Đã lưu ${rows.length}/${state.student_count} sinh viên. Khóa nguyện vọng và phân công đủ danh sách để công bố.</p>
+      ${catalog.length ? `<form data-action="manual">
+        ${manual ? '' : Object.entries(state.proposal?.results ?? {}).filter(([, run]) => run.status === 'feasible')
+          .map(([name]) => `<button type="button" class="secondary" data-copy-allocation="${esc(name)}">Điền theo ${esc(name.toUpperCase())}</button>`).join(' ')}
+        ${table(state.roster_preview.map(row => `<tr><th scope="row">${esc(row.name)} · ${esc(row.student_id)}</th><td>
+          <select name="${esc(row.student_id)}" aria-label="Giảng viên hướng dẫn cho ${esc(row.name)} · ${esc(row.student_id)}">
+            <option value="">Chưa phân công</option>
+            ${catalog.map(a => `<option value="${esc(a.advisor_id)}"${assigned.get(row.student_id) === a.advisor_id ? ' selected' : ''}>${esc(a.advisor_name)}</option>`).join('')}
+          </select></td></tr>`).join(''))}
+        <button class="secondary">Lưu phân công thủ công</button>
+      </form>` : '<p>Danh mục giảng viên chưa tải được.</p>'}
+      ${state.preferences_closed && manual && rows.length === state.student_count ? `<form data-action="publish-manual" class="thesis-actions thesis-publish">
+        <label class="confirmation"><input type="checkbox" required> Tôi đã rà soát bản phân công thủ công.</label>
+        <button class="primary">Công bố bản thủ công</button>
+      </form>` : ''}`}
+  </section>`;
+}
+
 function deanView() {
   const proposal = state.proposal;
   return `<div class="dean-layout"><div class="dean-main">
@@ -241,11 +276,12 @@ function deanView() {
       <button class="primary" ${state.preferences_closed ? '' : 'disabled'}>Chốt chỉ tiêu và chạy PPO / DQN</button>
     </form>` : ''}
   </section>
+  ${manualAllocation()}
   ${proposal?.results ? `<section class="work-section" aria-labelledby="semester-replay-title">
     <h2 id="semester-replay-title">Phát lại quá trình phân công</h2>
     <div id="semester-replay"></div></section>` : ''}
   <section class="work-section"><h2>${state.published ? 'Kết quả đã công bố' : 'So sánh phương án phân công'}</h2>
-    ${state.published_algorithm ? `<p>Phương án đang công bố · <strong>${esc(state.published_algorithm.toUpperCase())}</strong></p>` : ''}
+    ${state.published_algorithm ? `<p>Phương án đang công bố · <strong>${esc(state.published_algorithm === 'manual' ? 'Thủ công' : state.published_algorithm.toUpperCase())}</strong></p>` : ''}
     ${proposal?.results ? comparison(proposal) : proposal ? tables(proposal) : '<p>So sánh sẽ xuất hiện sau khi chạy cả hai mô hình.</p>'}
     ${proposal?.results && proposal.status === 'feasible' && !state.published ? `<form data-action="publish" class="thesis-actions thesis-publish">
       <label>Phương án công bố <select name="algorithm" required><option value="">Chọn phương án</option><option value="ppo">PPO</option><option value="dqn">DQN</option></select></label>
@@ -294,6 +330,7 @@ function updatePreviewQuotas() {
 
 function renderDean() {
   stopReplay();
+  manualDirty = false;
   content.innerHTML = deanView();
   updatePreviewQuotas();
   const player = $('semester-replay');
@@ -405,11 +442,27 @@ function updateTracks(form) {
 
 content.addEventListener('change', event => {
   const input = event.target;
+  if (input.matches('[data-action="manual"] select')) {
+    manualDirty = true;
+    const publish = content.querySelector('[data-action="publish-manual"] button');
+    if (publish) publish.disabled = true;
+  }
   if (input.name === 'roles') updateTracks(input.form);
   if (input.matches('[data-action="proposal"] input')) {
     if (input.checked) selected.add(input.value);
     else selected.delete(input.value);
     updatePreviewQuotas();
+  }
+});
+
+content.addEventListener('click', event => {
+  const button = event.target.closest('[data-copy-allocation]');
+  if (!button) return;
+  const assignments = state.proposal.results[button.dataset.copyAllocation].assignments;
+  manualDirty = true;
+  const advisors = new Map(assignments.map(row => [row.student_id, row.advisor_id]));
+  for (const select of button.form.querySelectorAll('select')) {
+    select.value = advisors.get(select.name) ?? '';
   }
 });
 
@@ -443,6 +496,9 @@ content.addEventListener('submit', async event => {
   else if (action === 'decision') payload = {decision: event.submitter.value, user_id: form.dataset.student};
   else if (action === 'threshold') payload = {threshold: Number(data.get('threshold'))};
   else if (action === 'proposal') payload = {advisor_ids: [...new Set([...selected, ...state.accepted_advisors])]};
+  else if (action === 'manual') payload = {id: state.manual?.id ?? null,
+    assignments: Object.fromEntries([...data].filter(([, advisor]) => advisor))};
+  else if (action === 'publish-manual') payload = {id: state.manual.id, algorithm: 'manual'};
   else if (action === 'publish') payload = {id: state.proposal.id, algorithm: data.get('algorithm')};
   else if (action === 'roster') {
     const file = data.get('csv_file');
@@ -458,7 +514,7 @@ content.addEventListener('submit', async event => {
   buttons.forEach(button => { button.disabled = true; });
   showStatus(action === 'proposal' ? 'Đang tính phương án…' : 'Đang lưu…', false, true);
   try {
-    await api('/' + (action === 'withdraw' ? 'choice' : action), payload);
+    await api('/' + ({withdraw: 'choice', 'publish-manual': 'publish'}[action] ?? action), payload);
     await refresh();
     const messages = {assessment: 'Đã lưu kết quả đánh giá.', choice: 'Đã lưu nguyện vọng theo thứ tự ưu tiên.', withdraw: 'Đã rút các nguyện vọng đang chờ.',
       topic: 'Đã lưu mô tả đề tài.',
@@ -466,6 +522,7 @@ content.addEventListener('submit', async event => {
       roster: 'Đã lưu danh sách khóa luận của kỳ.', close: 'Đã khóa nộp nguyện vọng. Giảng viên vẫn có thể duyệt.',
       reopen: 'Đã mở lại nộp nguyện vọng.', revoke: 'Đã thu hồi công bố. Có thể chỉnh và chạy lại.',
       decision: 'Đã lưu quyết định.', threshold: 'Đã lưu ngưỡng.', publish: 'Đã công bố kết quả phân công.',
+      manual: 'Đã lưu phân công thủ công.', 'publish-manual': 'Đã công bố bản phân công thủ công.',
       proposal: state.proposal?.status === 'feasible' ? 'Phương án đã sẵn sàng để rà soát.' : 'Chưa có phương án khả thi.'};
     showStatus(messages[action]);
   } catch (error) {
@@ -560,11 +617,11 @@ if (user) {
 
 if (['faculty', 'dean'].includes(user?.role)) {
   setInterval(async () => {
-    if (!state || document.hidden || saving || content.contains(document.activeElement)) return;
+    if (!state || document.hidden || saving || manualDirty || content.contains(document.activeElement)) return;
     const previous = state;
     try {
       const latest = await api();
-      if (saving || state !== previous || content.contains(document.activeElement)
+      if (saving || manualDirty || state !== previous || content.contains(document.activeElement)
           || JSON.stringify(previous) === JSON.stringify(latest)) return;
       state = latest;
       if (user.role === 'dean') {

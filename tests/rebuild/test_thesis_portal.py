@@ -55,6 +55,27 @@ def test_dean_csv_intake_locks_preferences_and_revokes_publication(service, tmp_
     assert student.get(base).json()['assignment'] is None
     assert dean.get(base).json()['preferences_closed'] is True
 
+    draft = {'id': None, 'assignments': {'S1': 'a'}}
+    assert faculty.post(base + '/manual', json=draft).status_code == 403
+    assert dean.post(base + '/manual', json={**draft, 'assignments': {'missing': 'a'}}).status_code == 422
+    assert dean.post(base + '/manual', json={**draft, 'assignments': {'S1': 'missing'}}).status_code == 422
+    assert dean.post(base + '/manual', json={**draft, 'assignments': {}}).status_code == 200
+    incomplete = dean.get(base).json()['manual']['id']
+    assert dean.post(base + '/publish', json={'id': incomplete, 'algorithm': 'manual'}).status_code == 409
+    assert dean.post(base + '/manual', json=draft).status_code == 409
+    assert dean.post(base + '/manual', json={**draft, 'id': incomplete}).status_code == 200
+
+    workspace = dean.get(base).json()
+    assert workspace['proposal']['id'] == 'sealed'
+    assert faculty.get(base).json()['assignments'] == []
+    manual = workspace['manual']
+    assert dean.post(base + '/publish', json={'id': manual['id'], 'algorithm': 'manual'}).status_code == 200
+    assert student.get(base).json()['assignment']['advisor_id'] == 'a'
+    assert faculty.get(base).json()['assignments'][0]['phone'] == '0912345678'
+    assert dean.post(base + '/manual', json={**draft, 'id': manual['id']}).status_code == 409
+    assert dean.post(base + '/revoke', json={}).status_code == 200
+    assert dean.get(base).json()['manual'] == manual
+
 
 def test_role_assessment_and_ranked_preferences(service, tmp_path, monkeypatch):
     from backend.app.rebuild_api import create_app
