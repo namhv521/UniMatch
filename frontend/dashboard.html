@@ -3,14 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Dashboard Huấn luyện Continual RL · UniMatch</title>
+  <title>Dashboard Huấn luyện Học tăng cường · UniMatch</title>
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
   <link rel="stylesheet" href="./portal.css">
 </head>
 <body class="training-page">
   <a class="skip-link" href="#main">Đi tới nội dung chính</a>
   <div id="demo-bar-slot"></div>
   <header class="portal-nav workspace-nav">
-    <a class="brand" href="./landing.html"><span class="brand-mark" aria-hidden="true"></span><span>Uni</span>Match</a>
+    <a class="brand" href="./landing.html"><img class="brand-mark" src="./assets/logo.svg" alt="" width="32" height="32" decoding="async"><span class="brand-wordmark"><span>Uni</span>Match</span></a>
     <nav aria-label="Điều hướng">
       <a href="./thesis.html">Khóa luận</a>
       <a href="./rebuild.html">Phân công</a>
@@ -22,7 +23,7 @@
   </header>
   <main id="main" class="dashboard">
     <header class="workspace-hero">
-      <span class="hero-eyebrow">Báo cáo Thực nghiệm Học Tăng cường Liên tục (Continual / Nested RL)</span>
+      <span class="hero-eyebrow">Báo cáo Thực nghiệm Học tăng cường</span>
       <h1>Tiến độ huấn luyện &amp; Kiểm thử độc lập</h1>
       <p class="dashboard-intro">Theo dõi tiến trình huấn luyện qua các phiên bản kỳ học V1, V2, V3 và 4 vòng phản hồi (R1–R4), đối chiếu trực tiếp với các baseline tối ưu trên tập kiểm thử đóng băng 2025.3.</p>
     </header>
@@ -47,12 +48,6 @@
         <summary>Xem bảng số liệu chi tiết của các vòng huấn luyện</summary>
         <div id="training-table" class="table-scroll chart-table"></div>
       </details>
-    </section>
-    <section class="work-section" style="margin-top:28px">
-      <h2>Diễn giải kết quả khoa học minh bạch</h2>
-      <p>Chạy đủ ngân sách bước (steps) không đồng nghĩa mô hình hội tụ đơn điệu. Các ứng viên không vượt qua kiểm định được ghi nhận chi phí tính toán rõ ràng.</p>
-      <p>Tập validation chỉ dùng để chọn lọc mô hình nội bộ; tập kiểm thử ngoài <strong>2025.3</strong> được giữ độc lập hoàn toàn sau khi đóng băng trọng số. Chỉ số hàm mục tiêu (Utility) đo mức thỏa mãn ràng buộc và tương thích đặc trưng, không đồng nhất với xác suất hướng dẫn thành công ngoài thực tế.</p>
-      <p id="training-source" class="help"></p>
     </section>
   </main>
   <footer class="portal-footer">UniMatch · Minh bạch số liệu thực nghiệm và hợp đồng mô hình.</footer>

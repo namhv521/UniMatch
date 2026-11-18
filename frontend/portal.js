@@ -229,7 +229,7 @@ async function training() {
     }
     $('training-chart').innerHTML=svg+'</svg>';
     $('training-explanation').textContent=`Đối chiếu Hungarian: ${number(data.baseline_objective)} điểm. Chấm lớn là mốc được chọn để phục vụ. Cả hai mô hình chưa đạt tiêu chí ổn định trong ngân sách đã thử.`;
-    $('training-source').textContent=`Nguồn: ${data.source}. ${data.validation_students} sinh viên validation, ${data.models.ppo.seeds} seed cho mỗi thuật toán. Lần chạy: ${data.run_id}.`;
+    if ($('training-source')) $('training-source').textContent=`Nguồn: ${data.source}. ${data.validation_students} sinh viên validation, ${data.models.ppo.seeds} seed cho mỗi thuật toán. Lần chạy: ${data.run_id}.`;
     $('training-table').innerHTML=`<table><caption>Số liệu validation thực</caption><thead><tr><th>Mô hình</th><th>Bước</th><th>Điểm trung bình</th><th>Khoảng tin cậy 95%</th></tr></thead><tbody>${Object.entries(data.models).flatMap(([key,model])=>model.curve.map(row=>`<tr><td>${key.toUpperCase()}</td><td>${number(row.steps)}</td><td>${number(row.mean)}</td><td>${row.ci95.map(number).join(' – ')}</td></tr>`)).join('')}</tbody></table>`;
   } catch(error) { $('training-status').textContent=error.message; }
   finally { refresh.disabled=false; }

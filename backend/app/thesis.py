@@ -174,7 +174,7 @@ def install_thesis(router, app, store, authenticated, check_origin):
                     raise HTTPException(409, 'semester_published')
             else:
                 state = db.execute('SELECT * FROM thesis_semesters WHERE semester=?', (semester,)).fetchone()
-            yield db, dict(state) if state else {'threshold': 70, 'proposal': None, 'published': None, 'revision': 0}
+            yield db, dict(state) if state else {'threshold': 15, 'proposal': None, 'published': None, 'revision': 0}
 
     def load_dossier(db, user_id):
         row = db.execute('SELECT * FROM thesis_dossiers WHERE semester=? AND user_id=?', (semester, user_id)).fetchone()
@@ -689,8 +689,9 @@ def install_thesis(router, app, store, authenticated, check_origin):
                     key: "'" + value if isinstance(value, str) and value.lstrip().startswith(('=', '+', '-', '@'))
                     else value for key, value in values.items()
                 })
+        clean_sem = re.sub(r'-(?:e2e|demo)\b', '', semester, flags=re.IGNORECASE) or semester
         return Response(output.getvalue().encode('utf-8-sig'), media_type='text/csv; charset=utf-8',
-                        headers={'Content-Disposition': f'attachment; filename="unimatch-{semester}-official.csv"',
+                        headers={'Content-Disposition': f'attachment; filename="unimatch-{clean_sem}-official.csv"',
                                  'Cache-Control': 'private, no-store'})
 
     @router.get('/api/thesis/export.xlsx')
@@ -739,11 +740,12 @@ def install_thesis(router, app, store, authenticated, check_origin):
             ws.column_dimensions[column_cells[0].column_letter].width = min(48, max(14, length + 4))
         buf = io.BytesIO()
         wb.save(buf)
+        clean_sem = re.sub(r'-(?:e2e|demo)\b', '', semester, flags=re.IGNORECASE) or semester
         return Response(
             buf.getvalue(),
             media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             headers={
-                'Content-Disposition': f'attachment; filename="unimatch-{semester}-official.xlsx"',
+                'Content-Disposition': f'attachment; filename="unimatch-{clean_sem}-official.xlsx"',
                 'Cache-Control': 'private, no-store',
             },
         )
@@ -753,11 +755,12 @@ def install_thesis(router, app, store, authenticated, check_origin):
         require(request, 'dean')
         with term() as (db, _):
             csv_body = export_advisor_skills_csv(active_service(), db=db)
+        clean_sem = re.sub(r'-(?:e2e|demo)\b', '', semester, flags=re.IGNORECASE) or semester
         return Response(
             csv_body.encode('utf-8-sig'),
             media_type='text/csv; charset=utf-8',
             headers={
-                'Content-Disposition': f'attachment; filename="unimatch-{semester}-advisor-skills.csv"',
+                'Content-Disposition': f'attachment; filename="unimatch-{clean_sem}-advisor-skills.csv"',
                 'Cache-Control': 'private, no-store',
             },
         )
@@ -807,10 +810,11 @@ def install_thesis(router, app, store, authenticated, check_origin):
                 for a in published.get('assignments', [])
             ],
         }
+        clean_sem = re.sub(r'-(?:e2e|demo)\b', '', semester, flags=re.IGNORECASE) or semester
         return JSONResponse(
             package,
             headers={
-                'Content-Disposition': f'attachment; filename="unimatch-{semester}-continual-rl.json"',
+                'Content-Disposition': f'attachment; filename="unimatch-{clean_sem}-rl-feedback.json"',
                 'Cache-Control': 'private, no-store',
             },
         )

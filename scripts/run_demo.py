@@ -349,7 +349,7 @@ def build_demo_app(*, host: str = '127.0.0.1', port: int = 8767, reset: bool = F
     _load_dotenv_safe(ROOT / '.env')
     db_path = runtime_dir / 'portal.sqlite3'
     origin = f'http://{host}:{port}'
-    semester = os.environ.get('UNIMATCH_THESIS_SEMESTER', '2026.1-demo').strip() or '2026.1-demo'
+    semester = os.environ.get('UNIMATCH_THESIS_SEMESTER', '2026.1').strip() or '2026.1'
 
     os.environ['UNIMATCH_DATABASE_URL'] = str(db_path)
     os.environ['UNIMATCH_AUTH_DB'] = str(db_path)

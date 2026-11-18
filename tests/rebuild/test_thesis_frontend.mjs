@@ -20,9 +20,10 @@ const context = {console, URL, URLSearchParams, Set, Map, Object, Number, Date, 
   fetch: async () => ({ok: true, status: 200, json: async () => context.latest})};
 const thesisSource = (await readFile(new URL('../../frontend/thesis.js', import.meta.url), 'utf8')).replace(/^import .*;\r?\n/gm, '');
 await vm.runInNewContext(`(async () => {${thesisSource}
-  globalThis.test = {studentView, facultyView, filteredFacultyRequests, deanRosterRows, manualAllocation,
+  globalThis.test = {studentView, facultyView, deanView, filteredFacultyRequests, deanRosterRows, manualAllocation,
     rememberManualDraft, pollWorkspace,
     state(value) {state = value;}, user(value) {user = value;},
+    selected(value) {selected = value;},
     catalog(value) {catalog = value;}, facultyFilter(search, status) {facultySearch = search; facultyStatus = status;},
     rosterFilter(search, status) {rosterSearch = search; rosterStatus = status;},
     rankings(value) {rankings = value;}, studentDirty(value) {studentDirty = value;}};
@@ -124,4 +125,57 @@ assert.equal(authForm.elements.reset_code.required, false);
 assert.equal(authForm.elements.reset_code.disabled, true);
 assert.equal(authForm.elements.new_password.disabled, true);
 
-console.log('Frontend checks passed: manual draft, role filters, status polling, survey explanation and password reset form.');
+// Verify -e2e cleanup, hidden advisor IDs, fixed 15% threshold, blue upload box, and 3-algorithm UI
+api.state({
+  semester: '2026.1-e2e',
+  advisor_name: 'ThS. Nguyễn Hùng Việt',
+  student_count: 8,
+  published: false,
+  teaching_load: {accepted: 1, assigned: 0, quota: 2},
+  my_semesters: [{semester: '2026.1-e2e', is_current: true, published: false, registered_count: 2, accepted_count: 1}],
+  requests: [],
+});
+const facHtml = api.facultyView();
+assert.doesNotMatch(facHtml, /-e2e/i);
+assert.match(facHtml, /Kỳ đang trực: 2026\.1/);
+
+api.catalog([{advisor_id: 'fit_5a04416402925947eef7', advisor_name: 'ThS. Nguyễn Hùng Việt', academic_title: 'ThS.'}]);
+api.selected(new Set(['fit_5a04416402925947eef7']));
+api.state({
+  semester: '2026.1-e2e',
+  roster_loaded: false,
+  student_count: 0,
+  preferences_closed: false,
+  pending_count: 0,
+  published: false,
+  advisor_skills: [{advisor_id: 'fit_5a04416402925947eef7', advisor_name: 'ThS. Nguyễn Hùng Việt', academic_title: 'ThS.', display_skills: ['NLP'], skill_count: 5}],
+});
+const deanHtml = api.deanView();
+assert.match(deanHtml, /15%/);
+assert.doesNotMatch(deanHtml, /data-action="threshold"|Lưu ngưỡng/);
+assert.match(deanHtml, /class="file-label thesis-upload-box" for="thesis-roster-file"/);
+assert.match(deanHtml, /Bỏ chọn toàn bộ/);
+const strippedAttrs = deanHtml.replace(/(?:value|data-quota)="[^"]*"/g, '');
+assert.doesNotMatch(strippedAttrs, /fit_5a04416402925947eef7/);
+
+for (const page of ['index.html', 'landing.html', 'login.html', 'thesis.html', 'rebuild.html', 'dashboard.html']) {
+  const html = await readFile(new URL(`../../frontend/${page}`, import.meta.url), 'utf8');
+  assert.match(html, /favicon\.svg/);
+  if (page !== 'index.html') assert.match(html, /logo\.svg/);
+}
+const landingHtml = await readFile(new URL('../../frontend/landing.html', import.meta.url), 'utf8');
+assert.match(landingHtml, /Khám phá quy trình 3 bước →/);
+assert.match(landingHtml, /<h3>RAG AI Agent<\/h3>/);
+assert.match(landingHtml, /<h3>Học tăng cường<\/h3>/);
+
+const dashboardHtml = await readFile(new URL('../../frontend/dashboard.html', import.meta.url), 'utf8');
+assert.doesNotMatch(dashboardHtml, /Diễn giải kết quả khoa học minh bạch/);
+
+const rebuildHtml = await readFile(new URL('../../frontend/rebuild.html', import.meta.url), 'utf8');
+const rebuildJs = await readFile(new URL('../../frontend/rebuild-app.js', import.meta.url), 'utf8');
+assert.match(rebuildHtml, /3\. Khuyến nghị/);
+assert.doesNotMatch(rebuildHtml, /Top-K/);
+assert.doesNotMatch(rebuildHtml, /\bgreedy\b|\brandom\b/i);
+assert.doesNotMatch(rebuildJs, /\bgreedy\b|\brandom\b/i);
+
+console.log('Frontend checks passed: manual draft, role filters, status polling, fixed threshold, -e2e cleanup, hidden advisor IDs, logo/favicon, and 3-algorithm UI.');

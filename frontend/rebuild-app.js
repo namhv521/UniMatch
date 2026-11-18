@@ -1,17 +1,18 @@
 import { confidenceLabel, requireSession } from "./portal.js";
-let confidenceThreshold = 70;
+const confidenceThreshold = 15;
 import { balancedQuotas } from "./student-cohorts.js";
 import { mountReplay } from "./allocation-replay.js";
 
 const $ = (id) => document.getElementById(id);
 const escape = (value = "") => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const labels = { ppo: "PPO", dqn: "DQN", hungarian: "Hungarian", greedy: "Greedy", random: "Random" };
+const ALLOWED_ALGORITHMS = ["hungarian", "ppo", "dqn"];
+const labels = { hungarian: "Hungarian", ppo: "PPO", dqn: "DQN" };
 const state = { bootstrap: null, base: "", selected: new Set(), cohort: null, file: null, comparison: null, recommendation: null, algorithm: "ppo", busy: false, revision: 0, quotaVerified: false };
 let stop = () => {};
 let previewedWorkbook;
 
 function nameStudent(id) { return state.cohort?.students?.find((s) => s.student_id === id)?.student_name || id; }
-function nameAdvisor(id) { return state.bootstrap?.advisors?.find((a) => a.advisor_id === id)?.advisor_name || id; }
+function nameAdvisor(id) { return state.bootstrap?.advisors?.find((a) => a.advisor_id === id)?.advisor_name || "Giảng viên"; }
 function score(value) { return typeof value === "number" && Number.isFinite(value) ? value.toFixed(3) : "Chưa biết"; }
 function number(value, digits = 2) { return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString("vi-VN", { maximumFractionDigits: digits }) : "—"; }
 function warningText(value) { return typeof value === "string" ? value : value?.message || JSON.stringify(value); }
@@ -104,7 +105,7 @@ function download(blob, filename) {
 function clearResults() {
   stop(); state.comparison = null; state.recommendation = null;
   $("comparison-result").className = "empty-state"; $("comparison-result").textContent = "Chưa có phân bổ cho hồ sơ và danh sách giảng viên hiện tại.";
-  $("allocation-panel").hidden = true; $("recommendation-result").className = "empty-state"; $("recommendation-result").textContent = "Chọn “Xem Top-K & Giải thích XAI” để lấy khuyến nghị cho danh sách hiện tại."; renderReplay(); updateControls();
+  $("allocation-panel").hidden = true; $("recommendation-result").className = "empty-state"; $("recommendation-result").textContent = "Chọn “Xem khuyến nghị” để lấy khuyến nghị cho danh sách hiện tại."; renderReplay(); updateControls();
 }
 
 async function connect() {
@@ -119,9 +120,7 @@ async function connect() {
     const descriptions = {
       hungarian: "Giải bài toán phân công tuyến tính toàn cục, tối đa hóa tổng điểm tương thích dưới ràng buộc chỉ tiêu.",
       ppo: "Chính sách học tăng cường (Proximal Policy Optimization) có Action Mask, chọn giảng viên theo phân phối xác suất đã học.",
-      dqn: "Mạng giá trị Q (Masked Double DQN) ước lượng phần thưởng dài hạn cho từng lựa chọn giảng viên hợp lệ.",
-      greedy: "Baseline tham lam chọn tuần tự cặp có điểm cao nhất còn khả thi.",
-      random: "Baseline chọn ngẫu nhiên có kiểm soát seed trên các suất hợp lệ."
+      dqn: "Mạng giá trị Q (Masked Double DQN) ước lượng phần thưởng dài hạn cho từng lựa chọn giảng viên hợp lệ."
     };
     const availableModels = new Set((state.bootstrap.algorithms || []).map(model => model.id));
     $("model-status").innerHTML = Object.entries(descriptions)
@@ -138,8 +137,11 @@ async function connect() {
 function renderAdvisors() {
   const query = $("advisor-search").value.trim().toLocaleLowerCase("vi-VN");
   const advisors = state.bootstrap?.advisors || [];
+  const scorableIds = advisors.filter((a) => a.scorable).map((a) => a.advisor_id);
+  const allSelected = scorableIds.length > 0 && scorableIds.every((id) => state.selected.has(id));
+  $("select-all").textContent = allSelected ? "Bỏ chọn tất cả" : "Chọn tất cả có tín hiệu";
   $("selection-count").textContent = `${state.selected.size} đã chọn`;
-  const filtered = advisors.filter((a) => `${a.advisor_name} ${a.advisor_id}`.toLocaleLowerCase("vi-VN").includes(query));
+  const filtered = advisors.filter((a) => String(a.advisor_name || "").toLocaleLowerCase("vi-VN").includes(query));
   $("advisor-list").innerHTML = `<legend class="sr-only">Chọn giảng viên tham gia</legend>${filtered.map((a) => `<label class="advisor-option ${a.scorable ? "" : "unavailable"}"><input type="checkbox" data-advisor="${escape(a.advisor_id)}" ${state.selected.has(a.advisor_id) ? "checked" : ""} ${!a.scorable ? "disabled" : ""}><span><b>${escape(a.advisor_name || "Giảng viên chưa có tên")}</b>${a.scorable ? "" : "<small>Chưa có tín hiệu phù hợp để phân bổ</small>"}</span></label>`).join("") || `<p class="empty-state">${state.bootstrap ? "Không có giảng viên khớp tìm kiếm." : "Đang tải danh mục giảng viên…"}</p>`}`;
 }
 
@@ -147,7 +149,7 @@ function renderQuota() {
   const count = state.cohort?.valid ? state.cohort.row_count : 0; const ids = selectedIds();
   if (!count || !ids.length) { $("quota-preview").textContent = "Nhập hồ sơ hợp lệ và chọn giảng viên để xem dự kiến chỉ tiêu."; return; }
   const quotas = balancedQuotas(count, ids);
-  $("quota-preview").innerHTML = `<strong>${count} sinh viên · ${ids.length} giảng viên · tổng ${count} chỗ</strong><div class="quota-list">${quotas.map((q) => `<span>${escape(nameAdvisor(q.id))}: <b>${q.quota}</b></span>`).join("")}</div><p class="help">Phần dư được chia theo thứ tự mã giảng viên chuẩn.</p>`;
+  $("quota-preview").innerHTML = `<strong>${count} sinh viên · ${ids.length} giảng viên · tổng ${count} chỗ</strong><div class="quota-list">${quotas.map((q) => `<span>${escape(nameAdvisor(q.id))}: <b>${q.quota}</b></span>`).join("")}</div><p class="help">Phần dư được phân bổ đều theo danh sách giảng viên tham gia.</p>`;
 }
 
 async function verifyQuota() {
@@ -205,7 +207,7 @@ async function importStudents(event, confirm = false) {
 }
 
 async function recommend() {
-  busy(true, "Đang tính khuyến nghị Top-K và phân rã XAI…");
+  busy(true, "Đang tính khuyến nghị giảng viên phù hợp…");
   try {
     const value = await api("/recommend", { cohort_id: state.cohort.cohort_id, advisor_ids: selectedIds(), top_k: Number($("top-k").value) }); state.recommendation = value;
     $("recommendation-result").className = "";
@@ -214,36 +216,36 @@ async function recommend() {
       <p class="help">Mã hồ sơ: ${escape(row.student_id)}</p>
       ${row.recommendations?.length ? `<ol class="recommendation-list">${row.recommendations.map((r) => `<li>
         <div><strong>${escape(r.advisor_name || nameAdvisor(r.advisor_id))}</strong><span class="score-label">E4: ${score(r.score)}</span></div>
-        <details class="xai-details-panel"><summary>Giải thích mức phù hợp (XAI Breakdown)</summary>${renderXaiExplanation(r.explanation)}</details>
+        <details class="xai-details-panel"><summary>Chi tiết mức độ phù hợp</summary>${renderXaiExplanation(r.explanation)}</details>
       </li>`).join("")}</ol>` : `<p class="help">Chưa đủ tín hiệu để xếp hạng trong danh sách đã chọn.</p>`}
     </article>`).join("") || "Chưa có khuyến nghị đủ bằng chứng.";
-    message("Đã tính Top-K kèm giải thích XAI trực quan.", "success");
+    message("Đã cập nhật danh sách khuyến nghị giảng viên.", "success");
   } catch (error) { message(errorMessage(error), "error"); }
   finally { busy(false); }
 }
 
 async function compare() {
   if (!$("confirm-policy").checked) return;
-  busy(true, "Đang chạy đối chiếu 5 thuật toán trên cùng danh sách…"); stop();
+  busy(true, "Đang chạy đối chiếu 3 thuật toán (Hungarian, PPO, DQN)…"); stop();
   try {
     const version = $("checkpoint-version").value;
     state.comparison = await api("/compare", { cohort_id: state.cohort.cohort_id, advisor_ids: selectedIds(), coordinator_confirmed: true, ...(version ? { checkpoint_version: version } : {}) });
-    const entries = Object.entries(state.comparison.results || {}); const preferred = ["hungarian", "ppo", "dqn"].find((key) => state.comparison.results[key]?.trace?.length);
+    const rawResults = state.comparison.results || {};
+    const entries = ALLOWED_ALGORITHMS.filter((id) => rawResults[id]).map((id) => [id, rawResults[id]]);
+    const preferred = ALLOWED_ALGORITHMS.find((key) => rawResults[key]?.trace?.length);
     state.algorithm = preferred || entries[0]?.[0] || "hungarian";
     $("comparison-result").className = "comparison-content";
-    $("comparison-result").innerHTML = `<div class="comparison-cards">${entries.map(([id]) => {
-      const r = state.comparison.results[id];
+    $("comparison-result").innerHTML = `<div class="comparison-cards">${entries.map(([id, r]) => {
       return `<article class="comparison-model" data-model="${escape(id)}">
         <h3>${escape(labels[id] || id)}</h3>
-        <p>${id==='ppo'?'Chính sách RL (PPO)':id==='dqn'?'Giá trị Q (DQN)':id==='hungarian'?'Tối ưu toàn cục':id==='greedy'?'Tham lam tuần tự':'Ngẫu nhiên có seed'}</p>
+        <p>${id==='ppo'?'Chính sách RL (PPO)':id==='dqn'?'Giá trị Q (DQN)':'Tối ưu toàn cục'}</p>
         <span class="metric">${number(r?.metrics?.mean_compatibility, 3)}</span>
         <p>Tương thích TB${r?.metrics?.scored_students !== undefined ? ` · ${number(r.metrics.scored_students, 0)} SV có điểm` : ""}</p>
         <meter min="0" max="1" value="${Number(r?.metrics?.mean_compatibility ?? 0)}" aria-label="Điểm tương thích trung bình" ${r?.metrics?.mean_compatibility == null ? "hidden" : ""}></meter>
         <p class="${r?.status==='feasible'?'status-good':'status-warn'}"><strong>${r?.status==='feasible'?'✓ Phân bổ hợp lệ':'Chưa khả thi'}</strong></p>
       </article>`;
     }).join('')}</div>
-    <div class="table-scroll"><table><caption>Bảng đối chiếu chỉ số các phương pháp</caption><thead><tr><th>Thuật toán</th><th>Trạng thái</th><th class="number">Hàm mục tiêu</th><th class="number">Tương thích TB</th><th class="number">Chênh tải chuẩn hóa</th><th class="number">Thời gian (giây)</th><th class="number">Bao phủ</th><th class="number">Vi phạm</th></tr></thead><tbody>${entries.map(([id]) => {
-      const r = state.comparison.results[id];
+    <div class="table-scroll"><table><caption>Bảng đối chiếu chỉ số các phương pháp</caption><thead><tr><th>Thuật toán</th><th>Trạng thái</th><th class="number">Hàm mục tiêu</th><th class="number">Tương thích TB</th><th class="number">Chênh tải chuẩn hóa</th><th class="number">Thời gian (giây)</th><th class="number">Bao phủ</th><th class="number">Vi phạm</th></tr></thead><tbody>${entries.map(([id, r]) => {
       return `<tr><td><strong>${escape(labels[id] || id)}</strong></td><td>${escape(r.status === "feasible" ? "Hợp lệ" : r.status === "infeasible" ? "Không khả thi" : r.status)}${r.diagnostics || r.diagnostic ? `<details class="xai-details-panel"><summary>Chẩn đoán</summary>${renderXaiExplanation(r.diagnostics || r.diagnostic)}</details>` : ""}</td><td class="number">${number(r.metrics?.objective, 3)}</td><td class="number">${number(r.metrics?.mean_compatibility, 3)}</td><td class="number">${number(r.metrics?.normalized_load_imbalance, 3)}</td><td class="number">${number(r.elapsed_seconds, 4)}</td><td class="number">${typeof r.metrics?.coverage === "number" ? `${number(r.metrics.coverage * 100)}%` : "—"}</td><td class="number">${number(r.metrics?.constraint_violations, 0)}</td></tr>`;
     }).join("")}</tbody></table></div>${warnings(state.comparison.warnings)}`;
     $("result-algorithm").innerHTML = entries.map(([key]) => `<option value="${escape(key)}" ${key === state.algorithm ? "selected" : ""}>${escape(labels[key] || key)}</option>`).join("");
@@ -259,7 +261,9 @@ async function compare() {
 function currentResult() { return state.comparison?.results?.[state.algorithm]; }
 function renderStudentComparison() {
   const id = $("student-comparison-id").value;
-  const rows = Object.entries(state.comparison?.results || {}).map(([algorithm, result]) => {
+  const rawResults = state.comparison?.results || {};
+  const rows = ALLOWED_ALGORITHMS.filter((alg) => rawResults[alg]).map((algorithm) => {
+    const result = rawResults[algorithm];
     const pair = result.assignments?.find(row => row.student_id === id);
     const point = pair?.score;
     return `<li><strong>${escape(labels[algorithm] || algorithm)}</strong><span>${escape(pair ? nameAdvisor(pair.advisor_id) : "Chưa có phân công")}</span><span class="score-label">${score(point)}</span></li>`;
@@ -327,7 +331,13 @@ $("export-workbook").addEventListener("click", async () => {
 $("advisor-search").addEventListener("input", renderAdvisors);
 $("advisor-list").addEventListener("change", (event) => { const id = event.target.dataset.advisor; if (!id) return; if (event.target.checked) state.selected.add(id); else state.selected.delete(id); selectionChanged(); });
 function selectionChanged() { state.revision++; state.quotaVerified = false; $("confirm-policy").checked = false; clearResults(); renderAdvisors(); renderQuota(); updateControls(); void verifyQuota(); }
-$("select-all").addEventListener("click", () => { state.selected = new Set(state.bootstrap.advisors.filter((a) => a.scorable).map((a) => a.advisor_id)); selectionChanged(); });
+$("select-all").addEventListener("click", () => {
+  const scorableIds = state.bootstrap.advisors.filter((a) => a.scorable).map((a) => a.advisor_id);
+  const allSelected = scorableIds.length > 0 && scorableIds.every((id) => state.selected.has(id));
+  if (allSelected) state.selected.clear();
+  else state.selected = new Set(scorableIds);
+  selectionChanged();
+});
 $("clear-selection").addEventListener("click", () => { state.selected.clear(); selectionChanged(); });
 $("confirm-policy").addEventListener("change", updateControls);
 $("recommend").addEventListener("click", recommend); $("compare").addEventListener("click", compare);
@@ -341,9 +351,5 @@ updateControls(); renderReplay();
 const user = await requireSession();
 if (user?.role === 'dean') {
   $("user-greeting").textContent = `Trưởng khoa · ${user.name}`;
-  try {
-    const response = await fetch("/api/thesis", { cache: "no-store" });
-    if (response.ok) confidenceThreshold = (await response.json()).threshold;
-  } catch { /* Default threshold applies when term is not active */ }
   await connect();
 } else if (user) location.replace("./thesis.html");

@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS model_bundles (
     bundle_key TEXT PRIMARY KEY, sha256 TEXT NOT NULL, payload BYTEA NOT NULL
 );
 CREATE TABLE IF NOT EXISTS thesis_semesters (
-    semester TEXT PRIMARY KEY, threshold INTEGER NOT NULL DEFAULT 70,
+    semester TEXT PRIMARY KEY, threshold INTEGER NOT NULL DEFAULT 15,
     revision INTEGER NOT NULL DEFAULT 0, proposal TEXT, published TEXT
 );
 CREATE TABLE IF NOT EXISTS thesis_students (

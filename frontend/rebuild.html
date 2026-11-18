@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Nhập hồ sơ Excel/CSV, kiểm tra kỹ năng giảng viên và so sánh 5 thuật toán phân công UniMatch kèm mô phỏng 3D/2D.">
+  <meta name="description" content="Nhập hồ sơ Excel/CSV, kiểm tra kỹ năng giảng viên và so sánh 3 thuật toán phân công UniMatch kèm mô phỏng 3D/2D.">
   <title>Bàn làm việc Phân công &amp; Nghiên cứu · UniMatch</title>
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
   <link rel="stylesheet" href="./portal.css">
   <script type="importmap">{"imports":{"three":"./vendor/three/three.module.js"}}</script>
 </head>
@@ -12,7 +13,7 @@
   <a class="skip-link" href="#main">Đi tới nội dung chính</a>
   <div id="demo-bar-slot"></div>
   <header class="portal-nav workspace-nav">
-    <a class="brand" href="./landing.html"><span class="brand-mark" aria-hidden="true"></span><span>Uni</span>Match</a>
+    <a class="brand" href="./landing.html"><img class="brand-mark" src="./assets/logo.svg" alt="" width="32" height="32" decoding="async"><span class="brand-wordmark"><span>Uni</span>Match</span></a>
     <nav aria-label="Điều hướng">
       <a href="./thesis.html">Khóa luận</a>
       <a href="./rebuild.html" aria-current="page">Phân công</a>
@@ -28,14 +29,14 @@
       <div>
         <span class="hero-eyebrow">Bàn làm việc Điều phối &amp; Đối chứng Thuật toán</span>
         <h1>So sánh mô hình phân công</h1>
-        <p>Nhập danh sách Excel/CSV, thiết lập giảng viên tham gia và đối chiếu Hungarian, PPO, DQN, Greedy, Random trên cùng ràng buộc.</p>
+        <p>Nhập danh sách Excel/CSV, thiết lập giảng viên tham gia và đối chiếu Hungarian, PPO và DQN trên cùng ràng buộc.</p>
       </div>
     </div>
     <nav class="workspace-jump" aria-label="Các phần phân công">
       <a href="#import">1. Nhập Hồ sơ</a>
       <a href="#advisors">2. Giảng viên &amp; Chỉ tiêu</a>
-      <a href="#rankings">3. Top-K &amp; Giải thích XAI</a>
-      <a href="#results">4. So sánh 5 Thuật toán</a>
+      <a href="#rankings">3. Khuyến nghị</a>
+      <a href="#results">4. So sánh 3 Thuật toán</a>
       <a href="#simulation">5. Mô phỏng 3D / 2D</a>
     </nav>
     <div id="message" class="status-banner" role="status" aria-live="polite" tabindex="-1" hidden></div>
@@ -75,7 +76,7 @@
             <span id="selection-count" class="count-label">0 đã chọn</span>
           </header>
           <div class="advisor-tools">
-            <label class="search-label">Tìm giảng viên<input id="advisor-search" type="search" placeholder="Nhập tên hoặc mã giảng viên..." disabled></label>
+            <label class="search-label">Tìm giảng viên<input id="advisor-search" type="search" placeholder="Nhập tên giảng viên..." disabled></label>
             <button id="select-all" class="secondary" type="button" disabled>Chọn tất cả có tín hiệu</button>
             <button id="clear-selection" class="secondary" type="button" disabled>Bỏ chọn</button>
           </div>
@@ -87,7 +88,7 @@
           <label class="confirmation"><input id="confirm-policy" type="checkbox" disabled><span>Tôi xác nhận danh sách giảng viên tham gia và quy tắc chia đều chỉ tiêu để chạy đối chiếu.</span></label>
           <label id="checkpoint-field" class="algorithm-picker" hidden>Phiên bản Checkpoint RL<select id="checkpoint-version"></select></label>
           <div class="main-actions">
-            <button id="recommend" class="secondary" type="button" disabled>Xem Top-K &amp; Giải thích XAI</button>
+            <button id="recommend" class="secondary" type="button" disabled>Xem khuyến nghị</button>
             <button id="compare" class="primary" type="button" disabled>Chạy so sánh thuật toán</button>
           </div>
         </section>
@@ -103,12 +104,12 @@
     <section id="rankings" class="work-section" aria-labelledby="rankings-title">
       <header class="section-heading">
         <div>
-          <h2 id="rankings-title">3. Khuyến nghị Top-K &amp; Giải thích XAI</h2>
-          <p>Xếp hạng độ tương thích cá nhân kèm phân rã thành phần điểm E4 (độc lập với chỉ tiêu toàn khóa).</p>
+          <h2 id="rankings-title">3. Khuyến nghị</h2>
+          <p>Gợi ý giảng viên phù hợp nhất cho từng hồ sơ sinh viên theo điểm tương thích E4 (độc lập với chỉ tiêu toàn khóa).</p>
         </div>
         <label class="top-k-label">Số gợi ý<select id="top-k"><option>3</option><option selected>5</option><option>10</option></select></label>
       </header>
-      <div id="recommendation-result" class="empty-state">Chọn “Xem Top-K &amp; Giải thích XAI” sau khi kiểm tra danh sách sinh viên.</div>
+      <div id="recommendation-result" class="empty-state">Chọn “Xem khuyến nghị” sau khi kiểm tra danh sách sinh viên.</div>
     </section>
 
     <section id="results" class="work-section result-section" aria-labelledby="results-title">

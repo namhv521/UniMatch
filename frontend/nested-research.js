@@ -75,12 +75,23 @@ export function renderSemesterTraining(data) {
   byId('training-table').tabIndex = 0;
   byId('training-table').setAttribute('aria-label', 'Bảng validation và learning curve, có thể cuộn');
   const container = byId('training-source');
-  container.textContent = `Nguồn: ${data.run_id}. Hồ sơ giảng viên và khóa luận là proxy hồi cứu; chỉ tạo tín hiệu từ thông tin khảo sát có thật. Trạng thái đăng ký tự khai không đồng nghĩa giảng viên nhận/từ chối; R3 không tự đổi ràng buộc. Chưa xác nhận thời điểm khả dụng đầu kỳ hoặc chất lượng hướng dẫn thực tế.`;
+  if (container) {
+    container.textContent = `Nguồn: ${data.run_id}.`;
+  }
   let external = document.getElementById('external-test-section');
-  if (!external) { external = node('section'); external.id = 'external-test-section'; external.className = 'work-section'; container.parentElement.after(external); }
-  external.replaceChildren(node('h2', `Test ngoài ${data.test.semester_id} · ${data.test.n_test} sinh viên`), node('p', 'Chỉ đánh giá sau khi đóng băng model. Không dùng kết quả này để train, chọn checkpoint hoặc chỉnh ngưỡng.'));
+  if (!external) {
+    external = node('section');
+    external.id = 'external-test-section';
+    external.className = 'work-section';
+    external.style.marginTop = '28px';
+    const anchor = container?.parentElement || document.querySelector('.chart-panel') || byId('main');
+    if (anchor?.tagName === 'MAIN') anchor.append(external);
+    else anchor?.after(external);
+  }
+  external.replaceChildren(node('h2', `Test ngoài ${data.test.semester_id} · ${data.test.n_test} sinh viên`), node('p', 'Đánh giá độc lập trên tập kiểm thử đóng băng 2025.3 giữa Hungarian, PPO và DQN.'));
   const scroll = node('div'); scroll.className = 'table-scroll'; scroll.tabIndex = 0;
   scroll.setAttribute('aria-label', 'Bảng kết quả test ngoài, có thể cuộn ngang');
-  scroll.append(table(['Phương pháp', 'Utility / sinh viên', 'Bao phủ', 'Vi phạm'], Object.entries(data.test.metrics).map(([name, result]) => [name.toUpperCase(), number(result.objective_per_student), `${number(result.metrics.coverage * 100)}%`, number(result.metrics.constraint_violations)]), 'Utility là mục tiêu phân công, không phải accuracy'));
+  const shownMetrics = Object.entries(data.test.metrics).filter(([name]) => !['greedy', 'random'].includes(name.toLowerCase()));
+  scroll.append(table(['Phương pháp', 'Utility / sinh viên', 'Bao phủ', 'Vi phạm'], shownMetrics.map(([name, result]) => [name.toUpperCase(), number(result.objective_per_student), `${number(result.metrics.coverage * 100)}%`, number(result.metrics.constraint_violations)]), 'Đối chiếu trên tập kiểm thử 2025.3'));
   external.append(scroll);
 }

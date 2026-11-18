@@ -206,26 +206,33 @@ meter {
   text-decoration: none;
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   letter-spacing: -0.03em;
 }
-.brand span { color: var(--blue); }
+.brand-wordmark {
+  display: inline-block;
+  line-height: 1;
+  color: inherit;
+}
+.brand-wordmark span,
+.brand > span:not(.brand-mark):not(.brand-wordmark) {
+  color: var(--blue);
+}
 .brand-mark {
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
-  background: linear-gradient(135deg, #1b78f2 0%, #072957 100%);
-  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   display: inline-block;
   flex: none;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+  object-fit: contain;
+  filter: drop-shadow(0 2px 5px rgba(7, 30, 61, 0.16));
+  transition: transform 0.18s ease;
 }
-.brand-mark::after {
-  content: "";
-  position: absolute;
-  inset: 6px;
-  border-radius: 3px;
-  border: 2px solid #9fd4ff;
+.brand:hover .brand-mark {
+  transform: scale(1.04);
+}
+span.brand-mark {
+  background: url('./assets/logo.svg') center / contain no-repeat;
 }
 
 .portal-nav {
@@ -346,7 +353,8 @@ meter {
 .landing-mast { background: #0b1933; color: var(--white); }
 .landing-mast .portal-nav { border-bottom: 1px solid rgba(184, 223, 255, 0.18); }
 .landing-mast .brand, .landing-mast .portal-nav nav a { color: var(--white); }
-.landing-mast .brand span:not(.brand-mark) { color: var(--sky); }
+.landing-mast .brand-wordmark span,
+.landing-mast .brand > span:not(.brand-mark):not(.brand-wordmark) { color: var(--sky); }
 .landing-mast .portal-nav nav a:hover { color: var(--sky); background: rgba(255, 255, 255, 0.08); }
 .nav-sign-in {
   border: 1px solid rgba(157, 196, 237, 0.55);
@@ -400,9 +408,9 @@ meter {
 .hero-copy h1 {
   color: var(--white);
   margin: 0;
-  font-size: clamp(3.2rem, 7.6vw, 5.4rem);
-  line-height: 1.04;
-  letter-spacing: -0.035em;
+  font-size: clamp(2.5rem, 5.4vw, 4.35rem);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
 }
 .hero-copy h1 em {
   color: #fde6b0;
@@ -1232,11 +1240,62 @@ meter {
 .dean-threshold { position: sticky; top: 18px; padding: 22px; }
 .dean-threshold form { display: grid; gap: 10px; }
 .threshold-value {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: var(--blue);
-  font-size: 2rem;
+  font-size: 2.1rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  margin: 4px 0 8px;
+}
+.threshold-fixed-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  border: 1px solid #b6d4f7;
+  color: var(--blue);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.thesis-upload-stack {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.thesis-upload-box {
+  background: #edf6ff;
+  border: 2px dashed #2b7de9;
+  border-radius: 14px;
+  padding: 18px 20px;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.thesis-upload-box:hover {
+  background: #dfeeff;
+  border-color: var(--blue);
+  box-shadow: 0 4px 14px rgba(10, 88, 202, 0.1);
+}
+.thesis-upload-box strong {
+  color: var(--navy-mid);
+  font-size: 0.98rem;
+}
+.thesis-upload-box input[type="file"] {
+  cursor: pointer;
+  width: 100%;
+  background: var(--white);
+  padding: 7px 10px;
+  border: 1px solid #bfd8f2;
+  border-radius: 9px;
+}
+.thesis-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .confidence-key {
   display: grid;

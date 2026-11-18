@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="neu-globe" x1="12" y1="6" x2="52" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#116ee8"/>
+      <stop offset="100%" stop-color="#073478"/>
+    </linearGradient>
+    <clipPath id="globe-clip">
+      <circle cx="32" cy="32" r="26"/>
+    </clipPath>
+  </defs>
+
+  <!-- Outer Circular University Seal -->
+  <circle cx="32" cy="32" r="31" fill="url(#neu-globe)"/>
+  <circle cx="32" cy="32" r="30.25" stroke="#9fd4ff" stroke-opacity="0.35" stroke-width="1.2"/>
+  <circle cx="32" cy="32" r="27" stroke="#ffffff" stroke-opacity="0.92" stroke-width="2"/>
+
+  <!-- NEU Globe Meridians & Latitude Parallels -->
+  <g clip-path="url(#globe-clip)" stroke="#8fceff" stroke-opacity="0.32" stroke-width="1.35">
+    <line x1="32" y1="6" x2="32" y2="58"/>
+    <ellipse cx="32" cy="32" rx="12.5" ry="25.5"/>
+    <path d="M6.5 25.2Q32 29.8 57.5 25.2"/>
+    <path d="M6.5 39.2Q32 35.2 57.5 39.2"/>
+  </g>
+
+  <!-- Minimalist Golden Laurel Rim Arcs (Concentric R=22.6) -->
+  <path d="M9.9 36.7A22.6 22.6 0 0 0 28.85 54.38" stroke="#fbbf24" stroke-width="2.3" stroke-linecap="round"/>
+  <path d="M54.1 36.7A22.6 22.6 0 0 1 35.15 54.38" stroke="#fbbf24" stroke-width="2.3" stroke-linecap="round"/>
+
+  <!-- Stacked White Open Book (Stylized "U" of UniMatch) -->
+  <path d="M18 27.8C23.2 28 28 30.1 32 33.7C36 30.1 40.8 28 46 27.8V40.2C40.8 40.4 36 42.2 32 45.6C28 42.2 23.2 40.4 18 40.2V27.8Z" fill="#ffffff"/>
+  <line x1="32" y1="33.4" x2="32" y2="45.4" stroke="#083b88" stroke-width="2" stroke-linecap="round"/>
+  <path d="M20.5 43.4C24.6 43.8 28.5 45.3 32 48.1C35.5 45.3 39.4 43.8 43.5 43.4" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Golden Academic Mortarboard (Thesis / Graduation) -->
+  <polygon points="32,12.2 44.2,17.9 32,23.6 19.8,17.9" fill="#fcd34d"/>
+  <path d="M25.4 20.9V24.1C25.4 25.7 28.3 26.9 32 26.9C35.7 26.9 38.6 25.7 38.6 24.1V20.9L32 24L25.4 20.9Z" fill="#fde68a"/>
+  <path d="M43.4 18.3V24" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="43.4" cy="24.5" r="1.2" fill="#fbbf24"/>
+</svg>
