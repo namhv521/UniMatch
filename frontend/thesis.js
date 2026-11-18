@@ -468,6 +468,43 @@ function updateFacultyRequests() {
   content.querySelector('[data-faculty-count]').textContent = `${rows.length} / ${state.requests.length} nguyện vọng`;
 }
 
+function facultySemestersSection() {
+  const sp = state.skill_profile;
+  const semesters = state.my_semesters || [];
+  return `<section class="work-section">
+    <div class="section-heading">
+      <div>
+        <h2>Hồ sơ Giảng viên &amp; Các kỳ Phân công Hướng dẫn</h2>
+        <p>${sp ? `${esc(sp.academic_title || 'Giảng viên')} · ${esc(sp.department || 'Khoa Công nghệ thông tin')} — ${esc(sp.summary || '')}` : `Giảng viên hướng dẫn: ${esc(state.advisor_name || '')}`}</p>
+      </div>
+      <span class="agent-tag passed">Kỳ đang trực: ${esc(state.semester)}</span>
+    </div>
+    ${(sp?.display_skills || []).length ? `<div class="skill-chip-group" style="margin-bottom:14px">${sp.display_skills.map(s => `<span class="skill-chip">${esc(s)}</span>`).join('')}</div>` : ''}
+    ${semesters.length ? `<div class="table-scroll" tabindex="0" role="region" aria-label="Các kỳ hướng dẫn của giảng viên">
+      <table>
+        <thead><tr><th scope="col">Kỳ học</th><th scope="col">Trạng thái kỳ</th><th scope="col">Đăng ký / Đã nhận</th><th scope="col">Chỉ tiêu</th><th scope="col">Sinh viên được phân công hướng dẫn</th></tr></thead>
+        <tbody>${semesters.map(sem => {
+          const statusBadge = sem.published
+            ? `<span class="thesis-confidence thesis-confidence-high">Đã công bố${sem.algorithm ? ` (${esc(sem.algorithm.toUpperCase())})` : ''}</span>`
+            : sem.preferences_closed
+              ? '<span class="thesis-confidence thesis-confidence-review">Đã khóa · Đang điều phối</span>'
+              : '<span class="thesis-confidence thesis-confidence-low">Đang mở đăng ký</span>';
+          const assignedHtml = sem.assigned_students?.length
+            ? `<ul style="margin:0;padding-left:16px">${sem.assigned_students.map(st => `<li><strong>${esc(st.student_name)}</strong>${st.student_id ? ` (${esc(st.student_id)})` : ''}${st.email ? ` · ${esc(st.email)}` : ''}${st.phone ? ` · ${esc(st.phone)}` : ''}${st.topic ? `<small>Đề tài: ${esc(st.topic.slice(0, 90))}</small>` : ''}</li>`).join('')}</ul>`
+            : sem.published ? '<span class="help">0 sinh viên trong đợt công bố này</span>' : '<span class="help">Chờ Trưởng khoa công bố phương án</span>';
+          return `<tr>
+            <th scope="row">${esc(sem.semester)}${sem.is_current ? '<small>Kỳ hiện tại</small>' : ''}</th>
+            <td>${statusBadge}</td>
+            <td><strong>${sem.registered_count}</strong> đăng ký · <strong>${sem.accepted_count}</strong> đã nhận</td>
+            <td><strong>${sem.quota ?? '—'}</strong></td>
+            <td>${assignedHtml}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>` : ''}
+  </section>`;
+}
+
 function facultyView() {
   const requests = state.requests || [];
   const accepted = requests.filter(r => r.status === 'accepted').length;
@@ -479,8 +516,9 @@ function facultyView() {
     <div class="kpi-card"><span>Đã chủ động nhận</span><strong>${state.teaching_load.accepted}</strong><small>Giữ chỗ trước phân bổ</small></div>
     <div class="kpi-card"><span>Nhóm chính thức</span><strong>${state.teaching_load.assigned} / ${state.teaching_load.quota ?? '—'}</strong><small>Đã phân công / Chỉ tiêu</small></div>
   </div>
+  ${facultySemestersSection()}
   <section class="work-section">
-    <h2>Nguyện vọng gửi đến ${esc(state.advisor_name || 'bạn')}</h2>
+    <h2>Sinh viên đăng ký nguyện vọng với ${esc(state.advisor_name || 'bạn')} (Kỳ ${esc(state.semester)})</h2>
     <p><strong>${state.student_count}</strong> sinh viên đã đăng ký khóa luận trong kỳ. <strong>${accepted}</strong> sinh viên đã được bạn nhận trước khi chia số chỗ còn lại.</p>
     <p><strong>Tải hướng dẫn:</strong> ${state.teaching_load.accepted} đã nhận · ${state.teaching_load.assigned} đã phân công chính thức · ${state.teaching_load.quota ?? 'Chưa chốt'} chỉ tiêu.</p>
     <div class="profile-fields faculty-filters">
@@ -491,19 +529,19 @@ function facultyView() {
     </div>
     <p class="help" data-faculty-count>${filtered.length} / ${requests.length} nguyện vọng</p>
     <div data-faculty-list>${facultyApplicantRows(filtered)}</div>
-    ${state.published ? `<div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--line)">
+    <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--line)">
       <div class="section-heading">
         <div>
-          <h2>Nhóm sinh viên hướng dẫn chính thức</h2>
-          <p>Theo dõi liên hệ, duyệt 3 mốc tiến độ khóa luận và ghi nhận đánh giá cuối kỳ (tín hiệu R4 Continual RL).</p>
+          <h2>Nhóm sinh viên được phân công hướng dẫn chính thức (Kỳ ${esc(state.semester)})</h2>
+          <p>${state.published ? 'Theo dõi liên hệ, duyệt 3 mốc tiến độ khóa luận và ghi nhận đánh giá cuối kỳ (tín hiệu R4 Continual RL).' : 'Danh sách sinh viên được phân công chính thức sẽ hiển thị tại đây ngay khi Trưởng khoa công bố phương án của kỳ học.'}</p>
         </div>
-        <div class="export-actions">
+        ${state.published ? `<div class="export-actions">
           <a class="button secondary" href="/api/thesis/export" download>Xuất danh sách nhóm CSV</a>
           <a class="button primary" href="/api/thesis/export.xlsx" download>Xuất biểu mẫu Excel (.xlsx)</a>
-        </div>
+        </div>` : ''}
       </div>
-      ${facultyAssignedWorkspace(state.assignments || [])}
-    </div>` : ''}
+      ${state.published ? facultyAssignedWorkspace(state.assignments || []) : `<p class="empty-state">${accepted ? `Bạn đã chủ động nhận ${accepted} sinh viên — các chỗ này được giữ cố định khi Trưởng khoa chạy phân công và công bố.` : 'Kỳ học hiện chưa công bố danh sách phân công chính thức.'}</p>`}
+    </div>
   </section>
   ${state.published ? `<section class="work-section"><h2>Danh sách liên hệ sinh viên đã từng đăng ký nguyện vọng</h2>
     ${contactTable(state.registered_students || [], 'Chưa có sinh viên đăng ký bạn hướng dẫn trong kỳ này.')}
@@ -748,20 +786,21 @@ function deanAdvisorSkillsSection() {
   return `<section class="work-section">
     <div class="section-heading">
       <div>
-        <h2>Ma trận Kỹ năng Giảng viên &amp; Kiểm toán Công bằng (${readyCount}/${items.length} đủ nhãn đa chiều)</h2>
-        <p>Đảm bảo mọi giảng viên đều có đầy đủ nhóm kỹ năng chuyên môn trong CSV để phép đo tương thích E4 và thuật toán phân công hoạt động công bằng.</p>
+        <h2>Danh sách Giảng viên Khoa &amp; Ma trận Kỹ năng (${readyCount}/${items.length} đủ nhãn công bằng)</h2>
+        <p>Theo dõi toàn bộ giảng viên hướng dẫn trong khoa, số nguyện vọng sinh viên đăng ký và ma trận kỹ năng phục vụ tính điểm tương thích E4.</p>
       </div>
       <a class="button secondary" href="/api/thesis/advisor-skills.csv" download>⬇ Tải CSV Kỹ năng GV đầy đủ</a>
     </div>
-    <details class="xai-details-panel">
-      <summary>Xem chi tiết kỹ năng 17 giảng viên &amp; cập nhật từ tệp CSV</summary>
+    <details class="xai-details-panel" open>
+      <summary>Bảng tổng hợp ${items.length} giảng viên hướng dẫn &amp; cập nhật CSV kỹ năng</summary>
       <div class="table-scroll">
         <table>
-          <thead><tr><th scope="col">Giảng viên</th><th scope="col">Tóm tắt chuyên môn</th><th scope="col">Các nhãn kỹ năng chuẩn hóa</th><th scope="col">Số nhãn</th></tr></thead>
+          <thead><tr><th scope="col">Giảng viên</th><th scope="col">Tóm tắt chuyên môn</th><th scope="col">Các nhãn kỹ năng chuẩn hóa</th><th scope="col">Nguyện vọng SV</th><th scope="col">Số nhãn</th></tr></thead>
           <tbody>${items.map(a => `<tr>
-            <th scope="row">${esc(a.advisor_name)}<small>${esc(a.advisor_id)}</small></th>
+            <th scope="row">${esc(a.advisor_name)}<small>${esc(a.academic_title || '')}${a.academic_title ? ' · ' : ''}${esc(a.advisor_id)}</small></th>
             <td>${esc(a.summary || '—')}</td>
             <td><div class="skill-chip-group" style="margin:0">${(a.display_skills || []).slice(0, 8).map(s => `<span class="skill-chip">${esc(s)}</span>`).join('')}</div></td>
+            <td><strong>${a.accepted_count ?? 0}</strong> nhận · <strong>${a.pending_count ?? 0}</strong> chờ</td>
             <td><strong>${a.skill_count ?? (a.display_skills || []).length}</strong></td>
           </tr>`).join('')}</tbody>
         </table>
@@ -817,7 +856,7 @@ function deanView() {
     ${!state.published && state.roster_loaded ? `<form data-action="${state.preferences_closed ? 'reopen' : 'close'}">
       <button class="secondary">${state.preferences_closed ? 'Mở lại đăng ký nguyện vọng' : 'Khóa đăng ký nguyện vọng để chốt chỉ tiêu'}</button></form>` : ''}
     ${catalogError ? `<p class="status-error">${esc(catalogError)}</p>` : ''}
-    ${!state.published && (state.roster_loaded || state.student_count) && catalog.length ? `<form data-action="proposal">
+    ${!state.published && catalog.length ? `<form data-action="proposal">
       <fieldset><legend>Chọn giảng viên tham gia hướng dẫn học kỳ</legend>
       <div class="quick-pref-btns" style="margin-bottom:10px">
         <button type="button" class="secondary" data-dean-select-all>Chọn toàn bộ (${catalog.length})</button>
@@ -828,8 +867,8 @@ function deanView() {
         return `<label class="advisor-option"><input type="checkbox" name="advisor_id" value="${esc(a.advisor_id)}" ${required || selected.has(a.advisor_id) ? 'checked' : ''} ${required ? 'disabled' : ''}>
         <span><b>${esc(a.advisor_name)}</b><small data-quota="${esc(a.advisor_id)}"></small></span></label>`;
       }).join('')}
-      </div></fieldset><p class="help">Chỉ tiêu tự động = số sinh viên giảng viên đã chủ động nhận + phần chia cân bằng từ số sinh viên còn lại.</p>
-      <button class="primary" ${state.roster_loaded && !state.preferences_closed ? 'disabled' : ''}>Chốt chỉ tiêu &amp; Chạy đối chiếu mô hình (Hungarian · PPO · DQN)</button>
+      </div></fieldset><p class="help">${!state.roster_loaded && !state.student_count ? 'Hãy tải lên danh sách CSV sinh viên ở Mục 1 và Khóa đăng ký nguyện vọng để mở nút chạy phân công.' : 'Chỉ tiêu tự động = số sinh viên giảng viên đã chủ động nhận + phần chia cân bằng từ số sinh viên còn lại.'}</p>
+      <button class="primary" ${(!state.roster_loaded && !state.student_count) || (state.roster_loaded && !state.preferences_closed) ? 'disabled' : ''}>Chốt chỉ tiêu &amp; Chạy đối chiếu mô hình (Hungarian · PPO · DQN)</button>
     </form>` : ''}
   </section>
 
@@ -914,7 +953,7 @@ function updatePreviewQuotas() {
     label.textContent = share === undefined ? '' : `Đã nhận ${accepted} · Chia thêm ${share} · Chỉ tiêu ${accepted + share}`;
   }
   const run = content.querySelector('[data-action="proposal"] button[type="submit"], [data-action="proposal"] > button.primary');
-  if (run) run.disabled = (state.roster_loaded && !state.preferences_closed) || !ids.length;
+  if (run) run.disabled = (!state.roster_loaded && !state.student_count) || (state.roster_loaded && !state.preferences_closed) || !ids.length;
   const publish = content.querySelector('[data-action="publish"] button');
   if (publish && state.proposal?.quotas) {
     const previous = state.proposal.quotas.map(q => q.advisor_id).sort();

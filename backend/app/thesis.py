@@ -481,11 +481,80 @@ def install_thesis(router, app, store, authenticated, check_origin):
                 quota = next((q['total'] for q in (published or proposal.get('manual') or proposal).get('quotas', [])
                               if q['advisor_id'] == user['advisor_id']), None)
                 assignments = assigned_students(db, published['assignments'], user['advisor_id'], roster) if published else []
+
+                # Build cross-semester supervision & assignment history for this lecturer
+                sem_rows = {
+                    r['semester']: dict(r)
+                    for r in db.execute('SELECT semester, proposal, published FROM thesis_semesters ORDER BY semester DESC').fetchall()
+                }
+                req_sems = {
+                    r['semester']
+                    for r in db.execute('SELECT DISTINCT semester FROM thesis_requests WHERE advisor_id=?', (user['advisor_id'],)).fetchall()
+                }
+                all_sem_keys = sorted(
+                    {s for s in (set(sem_rows) | req_sems | {semester, user.get('advisor_semester')}) if s},
+                    key=lambda s: (s != semester, s),
+                )
+                my_semesters = []
+                for sem_key in all_sem_keys:
+                    s_row = sem_rows.get(sem_key, {})
+                    s_pub = json.loads(s_row['published']) if s_row.get('published') else None
+                    s_prop = json.loads(s_row['proposal']) if s_row.get('proposal') else {}
+                    s_roster, s_closed = load_intake(db, sem_key)
+                    s_reqs = [
+                        dict(rr) for rr in db.execute(
+                            "SELECT user_id, status FROM thesis_requests WHERE semester=? AND advisor_id=? AND status IN ('pending','accepted','rejected')",
+                            (sem_key, user['advisor_id']),
+                        ).fetchall()
+                    ]
+                    if s_roster is not None:
+                        s_reqs = [rr for rr in s_reqs if rr['user_id'] in s_roster]
+                    s_quota = next(
+                        (q['total'] for q in (s_pub or s_prop.get('manual') or s_prop).get('quotas', []) if q['advisor_id'] == user['advisor_id']),
+                        None,
+                    )
+                    s_assigned = []
+                    if s_pub:
+                        for a_item in s_pub.get('assignments', []):
+                            if a_item.get('advisor_id') != user['advisor_id']:
+                                continue
+                            uid = a_item['user_id']
+                            r_entry = (s_roster or {}).get(uid, {})
+                            c_row = db.execute('SELECT email, phone FROM thesis_contacts WHERE semester=? AND user_id=?', (sem_key, uid)).fetchone()
+                            d_row = db.execute('SELECT formal_title FROM thesis_dossiers WHERE semester=? AND user_id=?', (sem_key, uid)).fetchone()
+                            p_row = db.execute('SELECT topic_description FROM thesis_preferences WHERE semester=? AND user_id=?', (sem_key, uid)).fetchone()
+                            s_assigned.append({
+                                'user_id': uid,
+                                'student_id': a_item.get('student_id') or r_entry.get('student_id') or '',
+                                'student_name': a_item.get('student_name') or r_entry.get('name') or '',
+                                'email': c_row['email'] if c_row else r_entry.get('email', ''),
+                                'phone': c_row['phone'] if c_row else r_entry.get('phone', ''),
+                                'topic': (d_row['formal_title'] if d_row and d_row['formal_title'] else '')
+                                         or (p_row['topic_description'] if p_row and p_row['topic_description'] else '')
+                                         or r_entry.get('topic', ''),
+                                'score': a_item.get('score'),
+                            })
+                    my_semesters.append({
+                        'semester': sem_key,
+                        'is_current': sem_key == semester,
+                        'published': bool(s_pub),
+                        'preferences_closed': bool(s_closed),
+                        'algorithm': s_pub.get('algorithm') if s_pub else None,
+                        'quota': s_quota,
+                        'registered_count': len(s_reqs),
+                        'accepted_count': sum(rr['status'] == 'accepted' for rr in s_reqs),
+                        'pending_count': sum(rr['status'] == 'pending' for rr in s_reqs),
+                        'assigned_students': s_assigned,
+                    })
+
                 return {
                     **result,
+                    'advisor_id': user['advisor_id'],
+                    'assigned_semester': user.get('advisor_semester') or semester,
                     'student_count': len(roster) if roster is not None else count['total'],
                     'advisor_name': advisor['advisor_name'] if advisor else '',
                     'skill_profile': advisor,
+                    'my_semesters': my_semesters,
                     'teaching_load': {
                         'accepted': sum(r['status'] == 'accepted' for r in requests),
                         'assigned': len(assignments),

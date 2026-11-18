@@ -23,7 +23,7 @@ PROVIDERS = {
     'github': ('https://github.com/login/oauth/authorize', 'https://github.com/login/oauth/access_token',
                'https://api.github.com/user', 'read:user'),
     'facebook': ('https://www.facebook.com/v23.0/dialog/oauth', 'https://graph.facebook.com/v23.0/oauth/access_token',
-                 'https://graph.facebook.com/v23.0/me?fields=id,name', 'public_profile'),
+                  'https://graph.facebook.com/v23.0/me?fields=id,name', 'public_profile'),
 }
 
 
@@ -97,9 +97,12 @@ class PortalStore:
         if not token or len(token) > 200:
             return None
         with self.connect() as db:
-            row = db.execute('SELECT u.id,u.name,u.provider,e.role,e.advisor_id,e.advisor_semester '
-                             'FROM users u JOIN sessions s ON s.user_id=u.id LEFT JOIN email_accounts e ON e.user_id=u.id '
-                             'WHERE s.token=? AND s.expires>?', (hashed(token), time.time())).fetchone()
+            row = db.execute(
+                'SELECT u.id,u.name,u.provider,u.subject,e.email,e.role,e.advisor_id,e.advisor_semester '
+                'FROM users u JOIN sessions s ON s.user_id=u.id LEFT JOIN email_accounts e ON e.user_id=u.id '
+                'WHERE s.token=? AND s.expires>?',
+                (hashed(token), time.time()),
+            ).fetchone()
         return dict(row) if row else None
 
     def create_pending(self, provider, verifier):
@@ -141,17 +144,50 @@ def install_portal(app):
         if request.headers.get('sec-fetch-site') == 'cross-site':
             raise HTTPException(403, 'origin_not_allowed')
 
+    def _resolve_faculty_advisor_id(candidate_id):
+        svc = getattr(app.state, 'rebuild_service', None)
+        valid_ids = getattr(svc, 'advisor_ids', None) if svc is not None else None
+        if candidate_id and (not valid_ids or candidate_id in valid_ids):
+            return candidate_id
+        if valid_ids:
+            from .email_auth import DEFAULT_HVN_ADVISOR_ID
+            return DEFAULT_HVN_ADVISOR_ID if DEFAULT_HVN_ADVISOR_ID in valid_ids else valid_ids[0]
+        return candidate_id
+
     def authenticated(request: Request):
+        from .email_auth import staff_role_for_email
         user = store.session(request.cookies.get(COOKIE))
         if user is None:
             raise HTTPException(401, 'login_required')
+        subject = user.pop('subject', None)
+        email = user.pop('email', None) or (subject if user.get('provider') == 'email' else None)
         account_role = user.pop('role')
         advisor_id = user.pop('advisor_id')
         advisor_semester = user.pop('advisor_semester')
-        if account_role:
-            roles = {'role': 'student' if account_role == 'dean' and advisor_semester not in (None, semester) else account_role}
-            if account_role == 'faculty':
-                roles['advisor_id'] = advisor_id if advisor_semester in (None, semester) else None
+
+        staff = staff_role_for_email(email)
+        if staff:
+            if staff['role'] == 'dean':
+                roles = {'role': 'dean'}
+            elif staff['role'] == 'faculty':
+                roles = {
+                    'role': 'faculty',
+                    'advisor_id': _resolve_faculty_advisor_id(advisor_id or staff['advisor_id']),
+                    'advisor_semester': advisor_semester or semester or None,
+                }
+            else:
+                roles = {'role': 'student'}
+        elif account_role:
+            if account_role == 'dean':
+                roles = {'role': 'dean'}
+            elif account_role == 'faculty':
+                roles = {
+                    'role': 'faculty',
+                    'advisor_id': _resolve_faculty_advisor_id(advisor_id),
+                    'advisor_semester': advisor_semester or semester or None,
+                }
+            else:
+                roles = {'role': 'student'}
         else:
             roles = {'role': 'dean'} if legacy_coordinator else role_for(user['id'], roster)
         return {**user, **roles}
@@ -249,7 +285,16 @@ def install_portal(app):
             subject = str(identity.get('sub') or identity.get('id') or '')
             if not subject:
                 raise ValueError()
-            session = store.create_session(provider, subject, str(identity.get('name') or identity.get('login') or 'Sinh viên'))
+            display_name = str(identity.get('name') or identity.get('login') or 'Sinh viên')
+            verified_email = (
+                str(identity.get('email') or '').strip().lower()
+                if provider == 'google' and identity.get('email_verified') is True
+                else ''
+            )
+            if verified_email and hashed(f'{provider}:{subject}') not in roster:
+                session = store.create_session('email', verified_email, display_name)
+            else:
+                session = store.create_session(provider, subject, display_name)
         except (httpx.HTTPError, ValueError, KeyError, TypeError):
             return RedirectResponse('/login.html?error=provider', status_code=303)
         response = RedirectResponse('/thesis.html' if semester else '/landing.html', status_code=303)
@@ -265,10 +310,10 @@ def install_portal(app):
         else:
             if authenticated(request)['role'] != 'dean':
                 raise HTTPException(403, 'dean_required')
-        if getattr(app.state,'semester_run',None) is not None:
+        if getattr(app.state, 'semester_run', None) is not None:
             from src.serving.semester_service import semester_telemetry
-            active=app.state.rebuild_get_service()
-            return semester_telemetry(app.state.semester_run,active.versions)
+            active = app.state.rebuild_get_service()
+            return semester_telemetry(app.state.semester_run, active.versions)
         path = getattr(app.state, 'training_report', ROOT / 'docs/validation/github_retraining_numeric_20261023.json')
         if not path.is_file():
             raise HTTPException(503, 'training_report_unavailable')
@@ -295,6 +340,7 @@ def install_portal(app):
         baseline = next(row['metrics']['objective'] for row in report['baselines'] if row['algorithm'] == 'hungarian')
         return {'mode': 'saved_experiment', 'run_id': report['experiment']['run_id'],
                 'updated_at': path.stat().st_mtime, 'models': models, 'baseline_objective': baseline,
+                'test_students': report['feature_summary']['train_validation_test'][2],
                 'test_evaluated': False, 'validation_students': report['feature_summary']['train_validation_test'][1],
                 'source': 'GitHub đã duyệt + hồ sơ giảng viên chính thức',
                 'production_promoted': False}

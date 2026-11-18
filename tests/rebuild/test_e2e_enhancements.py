@@ -440,3 +440,60 @@ def test_demo_mode_switcher_strictly_gated_outside_production(e2e_env, monkeypat
     monkeypatch.setenv('UNIMATCH_DEPLOYMENT', 'local')
     monkeypatch.setenv('UNIMATCH_DEMO_MODE', '0')
     assert anon.post('/api/auth/demo-switch', json={'email': 'dean@e2e.test'}, headers={'Origin': 'http://testserver'}).status_code == 404
+
+
+def test_three_canonical_roles_and_cross_semester_faculty_history(e2e_env):
+    app = e2e_env['app']
+    viet_id = e2e_env['ids'][1]
+
+    # Seed a prior published semester ('2025.3') in DB with advisor.hvn@neu.edu.vn assigned to a student,
+    # AND test that advisor_semester='2025.3' does NOT downgrade advisors.lead@neu.edu.vn or wipe advisor.hvn@neu.edu.vn on '2026.1-e2e'!
+    with app.state.portal_store.connect() as db:
+        pw = password_hash('Neu-Thesis-2026!')
+        insert_account(db, 'advisors.lead@neu.edu.vn', 'Trưởng khoa CNTT', pw, role='dean', advisor_semester='2025.3')
+        insert_account(db, 'advisor.hvn@neu.edu.vn', 'ThS. Nguyễn Hùng Việt', pw, role='faculty', advisor_id=viet_id, advisor_semester='2025.3')
+        prior_pub = {
+            'id': 'pub-2025-3',
+            'algorithm': 'hungarian',
+            'quotas': [{'advisor_id': viet_id, 'total': 2}],
+            'assignments': [
+                {'user_id': 'u_hist_1', 'student_id': '11210999', 'student_name': 'Lê Văn Kỷ Niệm', 'advisor_id': viet_id, 'score': 0.84}
+            ],
+        }
+        db.execute(
+            'INSERT INTO thesis_semesters(semester, published, revision) VALUES (?,?,1)',
+            ('2025.3', json.dumps(prior_pub, ensure_ascii=False)),
+        )
+
+    headers = {'Origin': 'http://testserver'}
+
+    # 1. Role 1: advisors.lead@neu.edu.vn -> MUST be 'dean' even on semester '2026.1-e2e' != '2025.3'
+    c_dean = TestClient(app, base_url='http://testserver')
+    assert c_dean.post('/api/auth/email/login', json={'email': 'advisors.lead@neu.edu.vn', 'password': 'Neu-Thesis-2026!'}, headers=headers).status_code == 200
+    assert c_dean.get('/api/auth/me').json()['role'] == 'dean'
+    dean_ws = c_dean.get('/api/thesis').json()
+    assert len(dean_ws['advisor_skills']) == 4  # Dean sees all lecturers & skills immediately
+
+    # 2. Role 2: advisor.hvn@neu.edu.vn -> MUST be 'faculty' with intact advisor_id AND cross-semester my_semesters!
+    c_fac = TestClient(app, base_url='http://testserver')
+    assert c_fac.post('/api/auth/email/login', json={'email': 'advisor.hvn@neu.edu.vn', 'password': 'Neu-Thesis-2026!'}, headers=headers).status_code == 200
+    me_fac = c_fac.get('/api/auth/me').json()
+    assert me_fac['role'] == 'faculty' and me_fac['advisor_id'] == viet_id
+    fac_ws = c_fac.get('/api/thesis').json()
+    sem_map = {s['semester']: s for s in fac_ws['my_semesters']}
+    assert '2026.1-e2e' in sem_map and '2025.3' in sem_map
+    assert sem_map['2025.3']['published'] is True
+    assert sem_map['2025.3']['assigned_students'][0]['student_name'] == 'Lê Văn Kỷ Niệm'
+
+    # 3. Role 3: hvn@st.neu.edu.vn + all new Email, Google (Gmail), GitHub, Facebook users -> MUST be 'student'!
+    c_stu = TestClient(app, base_url='http://testserver')
+    assert c_stu.post('/api/auth/email/register', json={
+        'email': 'hvn@st.neu.edu.vn', 'name': 'Hoàng Văn Nam', 'password': 'Student-Password-2026!'
+    }, headers=headers).status_code == 200
+    assert c_stu.get('/api/auth/me').json()['role'] == 'student'
+
+    for provider, subj in (('google', 'new-gmail-sub'), ('github', 'new-gh-id'), ('facebook', 'new-fb-id')):
+        tok = app.state.portal_store.create_session(provider, subj, f'New {provider} user')
+        c_oauth = TestClient(app, base_url='http://testserver', cookies={'unimatch_session': tok})
+        assert c_oauth.get('/api/auth/me').json()['role'] == 'student'
+

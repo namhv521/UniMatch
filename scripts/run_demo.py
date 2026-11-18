@@ -104,18 +104,26 @@ def seed_demo_workspace(app, *, semester: str, origin: str) -> None:
 
     demo_accounts = [
         {
+            'email': 'hvn@st.neu.edu.vn',
+            'name': 'Hoàng Văn Nam',
+            'role': 'student',
+            'badge': 'Sinh viên NEU',
+            'label': '🎓 SV Hoàng Văn Nam (hvn@st.neu.edu.vn)',
+        },
+        {
             'email': 'sv1@demo.unimatch.edu.vn',
             'name': 'Nguyễn Minh Anh',
             'role': 'student',
             'badge': 'Sinh viên (Đã khảo sát)',
-            'label': '🎓 SV Nguyễn Minh Anh (Đã chuẩn hóa)',
+            'label': '📝 SV Nguyễn Minh Anh (Đã chuẩn hóa)',
         },
         {
-            'email': 'sv2@demo.unimatch.edu.vn',
-            'name': 'Trần Quốc Bảo',
-            'role': 'student',
-            'badge': 'Sinh viên (Khảo sát mới)',
-            'label': '📝 SV Trần Quốc Bảo (Khảo sát mới)',
+            'email': 'advisor.hvn@neu.edu.vn',
+            'name': 'ThS. Nguyễn Hùng Việt',
+            'role': 'faculty',
+            'advisor_id': viet_id,
+            'badge': 'Giảng viên (advisor.hvn)',
+            'label': '👨‍🏫 GV advisor.hvn@neu.edu.vn',
         },
         {
             'email': 'lam.px@demo.unimatch.edu.vn',
@@ -126,19 +134,11 @@ def seed_demo_workspace(app, *, semester: str, origin: str) -> None:
             'label': '👨‍🏫 GV TS. Phạm Xuân Lâm',
         },
         {
-            'email': 'viet.nh@demo.unimatch.edu.vn',
-            'name': 'ThS. Nguyễn Hùng Việt',
-            'role': 'faculty',
-            'advisor_id': viet_id,
-            'badge': 'Giảng viên (NLP / LLM)',
-            'label': '👨‍🏫 GV ThS. Nguyễn Hùng Việt',
-        },
-        {
-            'email': 'dean@demo.unimatch.edu.vn',
+            'email': 'advisors.lead@neu.edu.vn',
             'name': 'Ban Chủ nhiệm Khoa CNTT',
             'role': 'dean',
-            'badge': 'Trưởng khoa / Điều phối',
-            'label': '🏛️ Trưởng khoa / Điều phối',
+            'badge': 'Trưởng khoa (advisors.lead)',
+            'label': '🏛️ Trưởng khoa (advisors.lead@neu.edu.vn)',
         },
     ]
     app.state.demo_accounts = demo_accounts
@@ -163,6 +163,7 @@ def seed_demo_workspace(app, *, semester: str, origin: str) -> None:
                 advisor_semester=semester if item['role'] in ('faculty', 'dean') else None,
             )
         extra_students = [
+            ('sv2@demo.unimatch.edu.vn', 'Trần Quốc Bảo'),
             ('sv3@demo.unimatch.edu.vn', 'Lê Hoàng Nam'),
             ('sv4@demo.unimatch.edu.vn', 'Phạm Thu Hà'),
             ('sv5@demo.unimatch.edu.vn', 'Vũ Đức Minh'),
@@ -172,6 +173,8 @@ def seed_demo_workspace(app, *, semester: str, origin: str) -> None:
         ]
         for email, name in extra_students:
             insert_account(db, email, name, pw_hash, role='student')
+        insert_account(db, 'dean@demo.unimatch.edu.vn', 'Ban Chủ nhiệm Khoa CNTT', pw_hash, role='dean', advisor_semester=semester)
+        insert_account(db, 'viet.nh@demo.unimatch.edu.vn', 'ThS. Nguyễn Hùng Việt', pw_hash, role='faculty', advisor_id=viet_id, advisor_semester=semester)
 
     headers = {'Origin': origin}
 
@@ -185,7 +188,7 @@ def seed_demo_workspace(app, *, semester: str, origin: str) -> None:
     roster_csv = '\n'.join([
         'student_id,name,email,phone,topic,skills',
         '11220101,Nguyễn Minh Anh,sv1@demo.unimatch.edu.vn,0912345101,Trợ lý tư vấn học vụ dùng RAG và LLM,Python;FastAPI;PyTorch;RAG',
-        '11220102,Trần Quốc Bảo,sv2@demo.unimatch.edu.vn,0912345102,Hệ thống thương mại điện tử thông minh,React;TypeScript;FastAPI;PostgreSQL',
+        '11220102,Hoàng Văn Nam,hvn@st.neu.edu.vn,0912345102,Hệ thống thương mại điện tử thông minh,React;TypeScript;FastAPI;PostgreSQL',
         '11220103,Lê Hoàng Nam,sv3@demo.unimatch.edu.vn,0912345103,Hệ thống gợi ý lộ trình học tập cá nhân hóa bằng RL,Python;PyTorch;React;MongoDB',
         '11220104,Phạm Thu Hà,sv4@demo.unimatch.edu.vn,0912345104,Phân tích cảm xúc bình luận thương mại điện tử tiếng Việt,Python;Hugging Face;SQL;Scikit-learn',
         '11220105,Vũ Đức Minh,sv5@demo.unimatch.edu.vn,0912345105,Nhận diện phương tiện giao thông thời gian thực với Computer Vision,Python;PyTorch;OpenCV;YOLO',
@@ -193,7 +196,7 @@ def seed_demo_workspace(app, *, semester: str, origin: str) -> None:
         '11220107,Hoàng Gia Huy,sv7@demo.unimatch.edu.vn,0912345107,Phân tích dữ liệu BI đánh giá mức độ chuyển đổi số doanh nghiệp SME,SQL;Python;Power BI;Quantitative Analysis',
         '11220108,Bùi Phương Thảo,sv8@demo.unimatch.edu.vn,0912345108,Ứng dụng học máy dự báo chuỗi thời gian nhu cầu kho vận,Python;Scikit-learn;SQL;Time Series',
     ])
-    dean_client = client_for('dean@demo.unimatch.edu.vn', 'Ban Chủ nhiệm Khoa CNTT')
+    dean_client = client_for('advisors.lead@neu.edu.vn', 'Ban Chủ nhiệm Khoa CNTT')
     res = dean_client.post('/api/thesis/roster', json={'csv_text': roster_csv}, headers=headers)
     if res.status_code != 200:
         raise RuntimeError(f'Failed to seed demo roster: {res.status_code} {res.text}')

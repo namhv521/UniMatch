@@ -18,6 +18,36 @@ DIGEST = re.compile(r'[0-9a-f]{64}')
 PASSWORD_WORKERS = threading.BoundedSemaphore(2)
 
 
+DEFAULT_HVN_ADVISOR_ID = 'fit_5a04416402925947eef7'
+
+
+def staff_role_for_email(email: str | None) -> dict | None:
+    if not email or not isinstance(email, str):
+        return None
+    norm = email.strip().lower()
+    custom_raw = os.environ.get('UNIMATCH_STAFF_EMAILS', '').strip()
+    if custom_raw:
+        try:
+            custom = json.loads(custom_raw)
+            if isinstance(custom, dict) and norm in custom and isinstance(custom[norm], dict):
+                entry = custom[norm]
+                if entry.get('role') in ('dean', 'faculty', 'student'):
+                    return {
+                        'role': entry['role'],
+                        'advisor_id': entry.get('advisor_id'),
+                    }
+        except ValueError:
+            pass
+    if norm == 'advisors.lead@neu.edu.vn':
+        return {'role': 'dean', 'advisor_id': None}
+    if norm == 'advisor.hvn@neu.edu.vn':
+        return {
+            'role': 'faculty',
+            'advisor_id': os.environ.get('UNIMATCH_HVN_ADVISOR_ID', DEFAULT_HVN_ADVISOR_ID).strip() or DEFAULT_HVN_ADVISOR_ID,
+        }
+    return None
+
+
 def normalized_email(value):
     email = value.strip().lower() if isinstance(value, str) else ''
     if len(email) > 254 or not EMAIL.fullmatch(email):
@@ -62,7 +92,26 @@ def issue_password_reset(store, email):
     return code
 
 
+def repair_canonical_staff_roles(store):
+    """Ensure canonical NEU dean & faculty accounts always hold their intended roles in DB."""
+    default_adv = os.environ.get('UNIMATCH_HVN_ADVISOR_ID', DEFAULT_HVN_ADVISOR_ID).strip() or DEFAULT_HVN_ADVISOR_ID
+    with store.connect() as db:
+        db.execute(
+            "UPDATE email_accounts SET role='dean', advisor_id=NULL WHERE email=?",
+            ('advisors.lead@neu.edu.vn',),
+        )
+        db.execute(
+            "UPDATE email_accounts SET role='faculty', advisor_id=COALESCE(advisor_id, ?) WHERE email=?",
+            (default_adv, 'advisor.hvn@neu.edu.vn'),
+        )
+        db.execute(
+            "UPDATE email_accounts SET role='student', advisor_id=NULL WHERE email=?",
+            ('hvn@st.neu.edu.vn',),
+        )
+
+
 def seed_accounts(store):
+    repair_canonical_staff_roles(store)
     entries = json.loads(os.environ.get('UNIMATCH_EMAIL_ACCOUNT_SEED', '[]') or '[]')
     if not isinstance(entries, list):
         raise ValueError('invalid_email_account_seed')
@@ -76,18 +125,20 @@ def seed_accounts(store):
             advisor_id, semester = entry.get('advisor_id'), entry.get('advisor_semester')
             if (role not in ('student', 'faculty', 'dean') or not isinstance(name, str) or not 1 <= len(name) <= 160
                     or not PASSWORD_HASH.fullmatch(encoded) or not DIGEST.fullmatch(activation)
-                    or (role == 'faculty') != bool(advisor_id and semester)):
+                    or (role == 'faculty') != bool(advisor_id)):
                 raise ValueError('invalid_email_account_seed')
             existing = db.execute('SELECT role,advisor_id,advisor_semester FROM email_accounts WHERE email=?',
                                   (email,)).fetchone()
             if existing:
-                if (existing['role'], existing['advisor_semester']) != (role, semester):
-                    raise ValueError('email_account_seed_role_conflict')
-                if role == 'faculty' and existing['advisor_id'] != advisor_id:
-                    db.execute('UPDATE email_accounts SET advisor_id=? WHERE email=?', (advisor_id, email))
+                if existing['role'] != role or (role == 'faculty' and existing['advisor_id'] != advisor_id):
+                    db.execute(
+                        'UPDATE email_accounts SET role=?, advisor_id=?, advisor_semester=COALESCE(?, advisor_semester) WHERE email=?',
+                        (role, advisor_id if role == 'faculty' else None, semester, email),
+                    )
                 continue
             insert_account(db, email, name, encoded, role=role, activation=activation, advisor_id=advisor_id,
                            advisor_semester=semester)
+    repair_canonical_staff_roles(store)
 
 
 def install_email_auth(router, store, check_origin, set_session_cookie, authenticated):
@@ -122,8 +173,11 @@ def install_email_auth(router, store, check_origin, set_session_cookie, authenti
                 raise HTTPException(422, 'invalid_name')
             name = name.strip()
             encoded = password_hash(password)
+            staff = staff_role_for_email(email)
+            assigned_role = staff['role'] if staff else 'student'
+            assigned_advisor = staff['advisor_id'] if staff else None
             with store.connect() as db:
-                if insert_account(db, email, name, encoded) is None:
+                if insert_account(db, email, name, encoded, role=assigned_role, advisor_id=assigned_advisor) is None:
                     raise HTTPException(409, 'email_unavailable')
         else:
             with store.connect() as db:
