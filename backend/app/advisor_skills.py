@@ -142,14 +142,19 @@ def _taxonomy_aliases_text(profile: dict, taxonomy: dict) -> str:
     return ' ; '.join(dict.fromkeys(p for p in phrases if p))
 
 
+_ENRICH_CACHE: dict[tuple, list[dict]] = {}
+
+
 def build_advisor_skill_entry(advisor: dict, taxonomy: dict, default_map: dict, db_map: dict) -> dict:
     aid = advisor['advisor_id']
     name = advisor.get('advisor_name') or advisor.get('name') or aid
     base = {**default_map.get(aid, {}), **db_map.get(aid, {})}
     raw_desc = advisor.get('research_description', '') or ''
+    has_base_skills = any(_split_tags(base.get(col)) for col in SKILL_GROUP_TO_TAXONOMY)
     extracted = {}
-    for match in normalize_mentions(raw_desc, taxonomy):
-        extracted.setdefault(match['group'], []).append(match['tag'])
+    if not has_base_skills and raw_desc:
+        for match in normalize_mentions(raw_desc[:6000], taxonomy):
+            extracted.setdefault(match['group'], []).append(match['tag'])
 
     entry = {
         'advisor_id': aid,
@@ -195,6 +200,14 @@ def enrich_advisors(active, db=None) -> list[dict]:
     taxonomy = getattr(active, 'taxonomy', None) or load_taxonomy(TAXONOMY_PATH)
     default_map = load_default_skill_map()
     db_map = load_db_skill_overrides(db)
+    cache_key = (
+        id(active),
+        tuple((a.get('advisor_id'), a.get('advisor_name'), (a.get('research_description') or '')[:120]) for a in active.advisors),
+        tuple(sorted((aid, row.get('updated_at', ''), row.get('summary', '')) for aid, row in db_map.items())),
+    )
+    cached = _ENRICH_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
     enriched = []
     for advisor in active.advisors:
         skill_entry = build_advisor_skill_entry(advisor, taxonomy, default_map, db_map)
@@ -205,6 +218,9 @@ def enrich_advisors(active, db=None) -> list[dict]:
             'raw_research_description': advisor.get('research_description', ''),
             'skill_profile': skill_entry,
         })
+    if len(_ENRICH_CACHE) > 16:
+        _ENRICH_CACHE.clear()
+    _ENRICH_CACHE[cache_key] = enriched
     return enriched
 
 

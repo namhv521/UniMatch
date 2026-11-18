@@ -229,6 +229,25 @@ class GuardrailedAcademicAgent:
         self.enriched_advisors = enrich_advisors(service)
         self.advisor_by_id = {a['advisor_id']: a for a in self.enriched_advisors}
 
+        # Build a single compiled fast tag-lookup map once (~5ms) instead of calling normalize_mentions per chunk
+        tag_patterns: list[tuple[str, re.Pattern]] = []
+        for grp_defs in (self.taxonomy.get('groups') or {}).values():
+            if not isinstance(grp_defs, dict):
+                continue
+            for tag_key, tag_def in grp_defs.items():
+                aliases = [tag_key.replace('_', ' ')]
+                if isinstance(tag_def, dict):
+                    aliases.extend(str(a) for a in tag_def.get('aliases', [])[:4] if a)
+                escaped = [re.escape(norm_vi(a)) for a in aliases if len(norm_vi(a)) >= 2]
+                if escaped:
+                    tag_patterns.append((tag_key, re.compile(r'\b(?:' + '|'.join(dict.fromkeys(escaped)) + r')\b')))
+
+        def _fast_chunk_tags(text_sample: str) -> set[str]:
+            norm_s = norm_vi(text_sample)
+            if not norm_s:
+                return set()
+            return {t_key for t_key, pat in tag_patterns if pat.search(norm_s)}
+
         chunks: list[dict] = []
         # 1. Structured skill profile chunks (ensures fair coverage for all 17 advisors)
         for adv in self.enriched_advisors:
@@ -243,7 +262,7 @@ class GuardrailedAcademicAgent:
                 'snippet': _redact_pii(skill_text[:280]),
                 'url': url,
                 'tags': set(sp['all_tags']),
-                'search_text': f"{sp['advisor_name']} {sp['enriched_text']}",
+                'search_text': f"{sp['advisor_name']} {sp['summary']} {' '.join(sp['display_skills'])} {' '.join(sp['all_tags'])}",
             })
 
         # 2. Research publication / repository chunks from faculty_records or base_assistant
@@ -257,8 +276,7 @@ class GuardrailedAcademicAgent:
                     continue
                 title = str(rec.get('title') or '').strip()
                 content = str(rec.get('content') or '').strip()
-                full = f"{title}. {content}".strip()
-                rec_tags = {m['tag'] for m in normalize_mentions(full, self.taxonomy)}
+                rec_tags = _fast_chunk_tags(f"{title} {content[:600]}")
                 for start in range(0, min(len(content), 3600), 600):
                     piece = content[start:start + 600].strip()
                     if not piece:
@@ -275,12 +293,20 @@ class GuardrailedAcademicAgent:
                         'search_text': f"{title} {piece}",
                     })
         elif hasattr(base_assistant, 'documents'):
+            seen_rec_meta: dict[int, tuple[str, set[str]]] = {}
+            per_rec_chunks: Counter[int] = Counter()
             for rec, piece in getattr(base_assistant, 'documents', []):
                 aid = rec.get('advisor_id')
                 url = _safe_url(rec.get('source_url'))
                 if aid in self.advisor_by_id and url and piece:
-                    title = str(rec.get('title') or '').strip()
-                    rec_tags = {m['tag'] for m in normalize_mentions(f"{title} {piece}", self.taxonomy)}
+                    rid = id(rec)
+                    if per_rec_chunks[rid] >= 3:
+                        continue
+                    per_rec_chunks[rid] += 1
+                    if rid not in seen_rec_meta:
+                        t_val = str(rec.get('title') or '').strip()
+                        seen_rec_meta[rid] = (t_val, _fast_chunk_tags(f"{t_val} {piece[:450]}"))
+                    title, rec_tags = seen_rec_meta[rid]
                     chunks.append({
                         'advisor_id': aid,
                         'advisor_name': self.advisor_by_id[aid]['advisor_name'],
