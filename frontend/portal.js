@@ -4,29 +4,77 @@ const number = value => Number(value).toLocaleString('vi-VN', { maximumFractionD
 
 export function confidenceLabel(score, threshold) {
   const high = typeof score === 'number' && score * 100 >= threshold - 1e-9;
-  return `<span class="thesis-confidence ${high ? 'thesis-confidence-high' : 'thesis-confidence-review'}">${high ?
+  return `<span class="thesis-confidence ${high ? 'thesis-confidence-high' : score == null ? 'thesis-confidence-low' : 'thesis-confidence-review'}">${high ?
     'Đạt ngưỡng tin tưởng' : score == null ? 'Chưa đủ dữ liệu' : 'Độ tin tưởng chưa cao'}</span>`;
+}
+
+export async function mountDemoBar(currentUser = null) {
+  const slot = $('demo-bar-slot');
+  if (!slot || typeof fetch !== 'function') return;
+  try {
+    const resp = await fetch('/api/auth/config', { credentials: 'same-origin', cache: 'no-store' });
+    if (!resp.ok) return;
+    const cfg = await resp.json();
+    if (!cfg?.demo_mode || !Array.isArray(cfg.demo_accounts) || !cfg.demo_accounts.length) return;
+    slot.innerHTML = `<div class="demo-switcher" role="region" aria-label="Chế độ Demo Bảo vệ Khóa luận">
+      <div class="demo-switcher-inner">
+        <span class="demo-switcher-label"><span class="demo-pulse" aria-hidden="true"></span>Chế độ Demo Bảo vệ Khóa luận · Chuyển nhanh vai trò 1-Click:</span>
+        <div class="demo-persona-buttons">
+          ${cfg.demo_accounts.map(acc => `<button type="button" class="demo-persona-btn" data-demo-email="${escape(acc.email)}"
+            ${currentUser?.name === acc.name ? 'aria-current="true"' : ''}>${escape(acc.label || (acc.badge ? `${acc.badge} · ${acc.name}` : acc.name || acc.email))}</button>`).join('')}
+        </div>
+      </div>
+    </div>`;
+    slot.querySelectorAll('[data-demo-email]').forEach(btn => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/auth/demo-switch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ email: btn.dataset.demoEmail }),
+        });
+        if (res.ok) location.assign('./thesis.html');
+        else btn.disabled = false;
+      } catch {
+        btn.disabled = false;
+      }
+    }));
+  } catch { /* Demo switcher stays hidden if config cannot be fetched */ }
 }
 
 export async function requireSession() {
   try {
     const response = await fetch('/api/auth/me', { credentials: 'same-origin', cache: 'no-store' });
     if (!response.ok) { location.replace('./login.html'); return null; }
-    return await response.json();
-  } catch { document.body.insertAdjacentHTML('afterbegin', '<p role="alert">Không kết nối được dịch vụ. Hãy tải lại trang.</p>'); return null; }
+    const user = await response.json();
+    void mountDemoBar(user);
+    return user;
+  } catch {
+    document.body.insertAdjacentHTML('afterbegin', '<p class="status-banner status-error" role="alert">Không kết nối được dịch vụ. Hãy tải lại trang.</p>');
+    return null;
+  }
 }
 
 export function wireLogout() {
   document.querySelectorAll('[data-logout]').forEach(button => button.addEventListener('click', async () => {
     button.disabled = true;
-    try { const result = await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }); if (!result.ok) throw new Error(); sessionStorage.removeItem('unimatch-rebuild-token'); location.replace('./login.html'); }
-    catch { button.disabled = false; button.textContent = 'Thử đăng xuất lại'; }
+    try {
+      const result = await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+      if (!result.ok) throw new Error();
+      sessionStorage.removeItem('unimatch-rebuild-token');
+      location.replace('./login.html');
+    } catch {
+      button.disabled = false;
+      button.textContent = 'Thử đăng xuất lại';
+    }
   }));
 }
 
 async function login() {
+  void mountDemoBar(null);
   try {
-    if ((await fetch('/api/auth/me')).ok) { location.replace('./landing.html'); return; }
+    if ((await fetch('/api/auth/me')).ok) { location.replace('./thesis.html'); return; }
   } catch { $('auth-notice').textContent='Không kết nối được dịch vụ đăng nhập. Kiểm tra mạng và tải lại trang.'; return; }
   let config;
   const buttons = [...document.querySelectorAll('[data-provider]')];
@@ -34,6 +82,7 @@ async function login() {
   const form = $('email-auth-form');
   const submit = $('email-auth-submit');
   const activate = $('email-activate');
+  const forgot = $('email-forgot');
   const authStatus = $('auth-status');
   let mode = 'login';
 
@@ -41,16 +90,30 @@ async function login() {
     mode = next;
     const register = mode === 'register';
     const activating = mode === 'activate';
+    const resetting = mode === 'reset';
+    const passwordless = resetting;
     $('email-name-field').hidden = !register;
     form.elements.name.required = register;
+    form.elements.name.disabled = !register;
     $('activate-fields').hidden = !activating;
     form.elements.activation_code.required = activating;
-    form.elements.new_password.required = activating;
+    form.elements.activation_code.disabled = !activating;
+    $('reset-fields').hidden = !resetting;
+    form.elements.reset_code.required = resetting;
+    form.elements.reset_code.disabled = !resetting;
+    $('new-password-field').hidden = !(activating || resetting);
+    form.elements.new_password.required = activating || resetting;
+    form.elements.new_password.disabled = !(activating || resetting);
+    $('email-password-field').hidden = passwordless;
+    form.elements.password.required = !passwordless;
+    form.elements.password.disabled = passwordless;
     form.elements.password.minLength = register ? 12 : 1;
     form.elements.password.autocomplete = register ? 'new-password' : 'current-password';
-    submit.textContent = register ? 'Tạo tài khoản sinh viên' : activating ? 'Đổi mật khẩu và đăng nhập' : 'Đăng nhập';
-    activate.hidden = register;
+    submit.textContent = register ? 'Tạo tài khoản sinh viên' : activating ? 'Kích hoạt và đăng nhập' : resetting ? 'Đặt lại mật khẩu' : 'Đăng nhập';
+    activate.hidden = register || resetting;
     activate.textContent = activating ? 'Quay lại đăng nhập' : 'Kích hoạt tài khoản được cấp';
+    forgot.hidden = register || activating;
+    forgot.textContent = resetting ? 'Quay lại đăng nhập' : 'Quên mật khẩu?';
     authStatus.textContent = '';
   }
 
@@ -58,11 +121,20 @@ async function login() {
     setMode(mode === 'activate' ? 'login' : 'activate');
     if (mode === 'activate') form.elements.activation_code.focus();
   });
+  forgot.addEventListener('click', () => {
+    setMode(mode === 'reset' ? 'login' : 'reset');
+    if (mode === 'reset') {
+      authStatus.textContent = 'Nhập email và mã khôi phục do trưởng khoa cấp.';
+      form.elements.reset_code.focus();
+    }
+  });
+  setMode('login');
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
-    const {email, password, name, activation_code, new_password} = Object.fromEntries(new FormData(form));
-    const body = {email, password, ...(mode === 'register' && {name}), ...(mode === 'activate' && {activation_code, new_password})};
+    const {email, password, name, activation_code, reset_code, new_password} = Object.fromEntries(new FormData(form));
+    const body = {email, ...(mode !== 'reset' && {password}), ...(mode === 'register' && {name}),
+      ...(mode === 'activate' && {activation_code, new_password}), ...(mode === 'reset' && {reset_code, new_password})};
     const messages = {
       invalid_email: 'Kiểm tra lại địa chỉ email.',
       invalid_password: 'Mật khẩu mới cần có ít nhất 12 ký tự.',
@@ -70,10 +142,11 @@ async function login() {
       email_unavailable: 'Email đã có tài khoản. Hãy chuyển sang đăng nhập.',
       invalid_credentials: 'Email hoặc mật khẩu chưa đúng.',
       invalid_activation: 'Mã kích hoạt chưa đúng.',
+      invalid_reset_code: 'Mã khôi phục sai hoặc đã hết hạn. Hãy xin mã mới từ trưởng khoa.',
       activation_used: 'Tài khoản đã kích hoạt. Hãy đăng nhập bằng mật khẩu mới.',
       email_auth_rate_limited: 'Có quá nhiều lần thử. Vui lòng đợi một phút.',
     };
-    submit.disabled = activate.disabled = true;
+    submit.disabled = activate.disabled = forgot.disabled = true;
     authStatus.textContent = 'Đang xác thực…';
     try {
       const response = await fetch('/api/auth/email/' + mode, {
@@ -89,7 +162,7 @@ async function login() {
     } catch {
       authStatus.textContent = 'Không kết nối được dịch vụ. Vui lòng thử lại.';
     } finally {
-      submit.disabled = activate.disabled = false;
+      submit.disabled = activate.disabled = forgot.disabled = false;
     }
   });
   for (const tab of [$('login-tab'), $('register-tab')]) {
@@ -108,7 +181,7 @@ async function login() {
   try {
     const response = await fetch('/api/auth/config'); if (!response.ok) throw new Error(); config = await response.json();
     const missing = Object.entries(config.providers).filter(([,ready]) => !ready).map(([provider]) => ({google:'Google',github:'GitHub',facebook:'Facebook'}[provider]));
-    $('auth-notice').textContent = missing.length ? `${missing.join(', ')} hiện chưa khả dụng.` : '';
+    $('auth-notice').textContent = missing.length ? `Đăng nhập mạng xã hội (${missing.join(', ')}) chưa cấu hình khóa OAuth — vui lòng dùng tài khoản Email phía trên.` : '';
     availability();
     buttons.forEach(button => button.addEventListener('click', async () => {
       buttons.forEach(item => {item.disabled=true;}); $('auth-status').textContent='Đang chuyển đến dịch vụ đăng nhập…';
@@ -127,8 +200,16 @@ async function training() {
     const response = await fetch('/api/rebuild/training', {cache:'no-store'});
     const data = await response.json(); if (!response.ok) throw new Error(response.status === 409 ? 'Báo cáo chưa khớp mô hình đang phục vụ.' : 'Chưa tải được báo cáo. Hãy thử lại.');
     if (data.mode === 'semester_nested') {
+      const legend = $('training-legend');
+      if (legend) {
+        legend.innerHTML = `<span data-swatch="r1">R1 · Khởi tạo</span><span data-swatch="r2">R2 · Phản hồi nguyện vọng</span><span data-swatch="r3">R3 · Kết quả hướng dẫn</span><span data-swatch="r4">R4 · Tinh chỉnh cuối</span><span data-swatch="hungarian">Hungarian · Đối chiếu</span>`;
+      }
       const { renderSemesterTraining } = await import('./nested-research.js');
       renderSemesterTraining(data); return;
+    }
+    const legend = $('training-legend');
+    if (legend) {
+      legend.innerHTML = `<span data-swatch="r1">PPO</span><span data-swatch="dqn">DQN</span><span data-swatch="hungarian">Hungarian · Đối chiếu</span>`;
     }
     $('training-status').textContent = `Báo cáo lần chạy đã lưu · cập nhật ${new Date(data.updated_at*1000).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'})}. Không phải tiến trình train trực tiếp.`;
     $('training-summary').innerHTML = Object.entries(data.models).map(([key,model]) => `<article class="training-model" data-model="${key}"><h2>${key.toUpperCase()}</h2><strong>${number(model.trained_steps)}</strong> bước / seed<progress value="${model.trained_steps}" max="${model.target_steps}" aria-label="Tiến độ ${key.toUpperCase()}"></progress><dl><dt>Ngân sách</dt><dd>${number(model.target_steps)} bước</dd><dt>Số seed</dt><dd>${model.seeds}</dd><dt>Mô hình được chọn tại</dt><dd>${number(model.selected_steps)} bước</dd><dt>Ổn định trong cửa sổ đo</dt><dd>${model.plateau ? 'Đạt tiêu chí' : 'Chưa đạt'}</dd></dl><p>Độ dao động ${number(model.observed_range)}; ngưỡng ${number(model.criterion.max_mean_compatibility_range)} trong ${model.criterion.evaluations} lần đánh giá cuối.</p></article>`).join('');
@@ -140,7 +221,7 @@ async function training() {
     let svg = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="curve-title curve-desc"><title id="curve-title">Điểm validation theo số bước huấn luyện</title><desc id="curve-desc">PPO và DQN vẫn dao động, dưới đường đối chiếu Hungarian. Số liệu đầy đủ có trong bảng bên dưới.</desc>`;
     for(let i=0;i<=maxY;i++) svg+=`<line x1="${left}" x2="${width-right}" y1="${y(i)}" y2="${y(i)}" stroke="#dceaf4"/><text x="${left-12}" y="${y(i)+5}" text-anchor="end" fill="#466780">${i}</text>`;
     for(let i=0;i<=4;i++){const step=maxX*i/4;svg+=`<text x="${x(step)}" y="${height-35}" text-anchor="middle" fill="#466780">${number(step/1000)}k</text>`;}
-    svg+=`<text x="500" y="${height-5}" text-anchor="middle" fill="#466780">Số bước học / seed</text><line x1="${left}" x2="${width-right}" y1="${y(data.baseline_objective)}" y2="${y(data.baseline_objective)}" stroke="#188367" stroke-width="2" stroke-dasharray="8 5"/>`;
+    svg+=`<text x="500" y="${height-5}" text-anchor="middle" fill="#466780">Số bước học / seed</text><line x1="${left}" x2="${width-right}" y1="${y(data.baseline_objective)}" y2="${y(data.baseline_objective)}" stroke="#334155" stroke-width="2" stroke-dasharray="8 5"/>`;
     for(const [key,model] of Object.entries(data.models)) {
       const color=key==='ppo'?'#1167bd':'#c17520';
       svg+=`<polygon points="${points(model.curve,row=>row.ci95[1])} ${points([...model.curve].reverse(),row=>row.ci95[0])}" fill="${color}" opacity=".1"/><polyline points="${points(model.curve,row=>row.mean)}" fill="none" stroke="${color}" stroke-width="3"/>`;

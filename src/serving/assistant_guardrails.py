@@ -33,7 +33,7 @@ def classify(question):
     if re.fullmatch(r'(?:cam on|thank you|thanks|tam biet|bye|goodbye)(?: (?:ban|nhe|a))?', normalized):
         return 'courtesy'
     if re.search(r'\b(?:thoi tiet|du bao mua|weather|bong da|bong ro|ke chuyen cuoi|'
-                 r'gia bitcoin|gia vang|boi tu vi|viet bai hat|ban khoe khong|how are you)\b', normalized):
+                 r'gia bitcoin|gia vang|xo so|vietlott|nau an|cong thuc nau|tra sua|boi tu vi|cung hoang dao|tarot|viet bai hat|viet bai tho|tong thong|thu tuong|giai phuong trinh|tinh giai thua|fibonacci|viet ho khoa luan|lam ho do an|code full project|ban khoe khong|how are you)\b', normalized):
         return 'out_of_scope'
     if re.fullmatch(r'(?:con ai(?: nua)?|ai nua|co ai khac khong|con gi nua|noi (?:ro|them|ky) hon|'
                     r'chi tiet hon|cho minh them (?:nguon|vi du)|(?:cho minh )?(?:xem|xin|them) nguon(?: tham khao)?|'

@@ -31,6 +31,15 @@ def hashed(value):
     return hashlib.sha256(value.encode()).hexdigest()
 
 
+def client_address(request: Request) -> str:
+    if os.environ.get('UNIMATCH_TRUST_PROXY_HEADERS') == '1':
+        forwarded = request.headers.get('x-forwarded-for', '')
+        first = forwarded.split(',')[0].strip()
+        if first and len(first) <= 64:
+            return first
+    return request.client.host if request.client else 'unknown'
+
+
 class AuthStartRateLimiter:
     """Bound OAuth-start requests per direct client IP in a sliding window."""
     def __init__(self, limit, window_seconds):
@@ -159,7 +168,25 @@ def install_portal(app):
 
     @router.get('/api/auth/config')
     def config():
-        return {'providers': {key: provider_ready(key) for key in PROVIDERS}}
+        demo_mode = os.environ.get('UNIMATCH_DEMO_MODE') == '1' and os.environ.get('UNIMATCH_DEPLOYMENT') != 'production'
+        result = {'providers': {key: provider_ready(key) for key in PROVIDERS}, 'demo_mode': demo_mode}
+        if demo_mode:
+            result['demo_accounts'] = getattr(app.state, 'demo_accounts', [])
+        return result
+
+    @router.post('/api/auth/demo-switch')
+    async def demo_switch(request: Request):
+        if not (os.environ.get('UNIMATCH_DEMO_MODE') == '1' and os.environ.get('UNIMATCH_DEPLOYMENT') != 'production'):
+            raise HTTPException(404, 'not_found')
+        check_origin(request)
+        payload = await (app.state.rebuild_read_body(request) if hasattr(app.state, 'rebuild_read_body') else request.json())
+        email = str(payload.get('email') or '').strip().lower() if isinstance(payload, dict) else ''
+        allowed = {item['email']: item for item in getattr(app.state, 'demo_accounts', [])}
+        if email not in allowed:
+            raise HTTPException(404, 'demo_account_not_found')
+        persona = allowed[email]
+        token = store.create_session('email', email, persona['name'])
+        return set_session_cookie(JSONResponse({'ok': True, 'role': persona['role'], 'name': persona['name']}), token)
 
     @router.get('/api/auth/me')
     def me(request: Request):
@@ -179,7 +206,7 @@ def install_portal(app):
         check_origin(request)
         if provider not in PROVIDERS or not provider_ready(provider):
             raise HTTPException(503, 'social_login_not_configured')
-        client_ip = request.client.host if request.client else 'unknown'
+        client_ip = client_address(request)
         if not app.state.portal_auth_start_rate_limiter.allow(client_ip):
             raise HTTPException(429, 'auth_start_rate_limited', headers={
                 'Retry-After': str(app.state.portal_auth_start_rate_limiter.window_seconds)})
@@ -225,7 +252,7 @@ def install_portal(app):
             session = store.create_session(provider, subject, str(identity.get('name') or identity.get('login') or 'Sinh viên'))
         except (httpx.HTTPError, ValueError, KeyError, TypeError):
             return RedirectResponse('/login.html?error=provider', status_code=303)
-        response = RedirectResponse('/landing.html', status_code=303)
+        response = RedirectResponse('/thesis.html' if semester else '/landing.html', status_code=303)
         set_session_cookie(response, session)
         response.delete_cookie('unimatch_oauth', path='/api/auth/callback')
         return response
@@ -273,7 +300,7 @@ def install_portal(app):
                 'production_promoted': False}
 
     from .email_auth import install_email_auth
-    install_email_auth(router, store, check_origin, set_session_cookie)
+    install_email_auth(router, store, check_origin, set_session_cookie, authenticated)
     install_thesis(router, app, store, authenticated, check_origin)
     # Put exact endpoints before the frontend StaticFiles catch-all.
     old = list(app.router.routes)

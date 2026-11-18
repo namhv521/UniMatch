@@ -3,44 +3,80 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Khóa luận · UniMatch</title>
+  <title>Không gian Khóa luận · UniMatch</title>
   <link rel="stylesheet" href="./portal.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three/three.module.js"}}</script>
 </head>
 <body class="thesis-workspace">
   <a class="skip-link" href="#main">Đi tới nội dung chính</a>
+  <div id="demo-bar-slot"></div>
   <header class="portal-nav workspace-nav">
-    <a class="brand" href="./landing.html"><span>Uni</span>Match</a>
+    <a class="brand" href="./landing.html"><span class="brand-mark" aria-hidden="true"></span><span>Uni</span>Match</a>
     <nav aria-label="Điều hướng">
       <a href="./thesis.html" aria-current="page">Khóa luận</a>
       <a href="./rebuild.html" data-dean hidden>Phân công</a>
       <a href="./dashboard.html" data-dean hidden>Dashboard</a>
     </nav>
-    <button class="secondary" data-logout>Đăng xuất</button>
+    <div class="nav-user-actions">
+      <span id="nav-role-badge" class="role-badge" hidden></span>
+      <button class="secondary" data-logout>Đăng xuất</button>
+    </div>
   </header>
   <main id="main">
     <header class="thesis-heading workspace-hero">
-      <h1 id="thesis-title">Khóa luận</h1>
-      <p id="thesis-period"></p>
+      <div class="hero-heading-row">
+        <div>
+          <span id="thesis-role-kicker" class="hero-eyebrow">Không gian học vụ</span>
+          <h1 id="thesis-title">Khóa luận</h1>
+          <p id="thesis-period"></p>
+        </div>
+        <button type="button" class="secondary hero-refresh-btn" id="workspace-refresh-btn" title="Làm mới dữ liệu kỳ học">↻ Làm mới</button>
+      </div>
     </header>
-    <nav class="workspace-jump" aria-label="Các phần khóa luận" data-student hidden>
-      <a href="#thesis-chat">Trợ lý</a>
+    <nav class="workspace-jump" aria-label="Các phần khóa luận" id="workspace-jump-nav" data-student hidden>
+      <a href="#section-assessment">1. Khảo sát &amp; Kỹ năng</a>
+      <a href="#section-dossier">2. Chuẩn hóa Hồ sơ</a>
+      <a href="#section-advisors">3. Danh bạ &amp; Gợi ý GV</a>
+      <a href="#section-preferences">4. Nguyện vọng</a>
+      <a href="#thesis-chat">5. Trợ lý RAG Agent</a>
     </nav>
-    <p id="thesis-status" role="status" tabindex="-1">Đang tải không gian khóa luận…</p>
+    <p id="thesis-status" class="status-banner" role="status" tabindex="-1">Đang tải không gian khóa luận…</p>
     <div id="thesis-content" aria-busy="true"></div>
-    <section id="thesis-chat" class="work-section" hidden aria-labelledby="thesis-chat-title">
-      <h2 id="thesis-chat-title">Hỏi trợ lý về giảng viên</h2>
-      <button type="button" class="secondary" id="fill-skill-question" hidden>Soạn câu hỏi từ hồ sơ kỹ năng</button>
-      <form id="thesis-chat-form" class="thesis-actions">
-        <label for="thesis-question">Câu hỏi về giảng viên hoặc chủ đề</label>
-        <input id="thesis-question" name="question" required maxlength="1000" placeholder="Giảng viên nào nghiên cứu về học máy?">
-        <button class="primary">Gửi câu hỏi</button>
-      </form>
+
+    <section id="thesis-chat" class="work-section agent-section" hidden aria-labelledby="thesis-chat-title">
+      <header class="section-heading">
+        <div>
+          <div class="agent-title-row">
+            <h2 id="thesis-chat-title">Trợ lý Học thuật AI Agent (Grounded RAG)</h2>
+            <span class="guardrail-pill">✓ 4-Layer Guardrails Active</span>
+          </div>
+          <p>Tra cứu đúng trọng tâm về giảng viên, hướng nghiên cứu và mức độ phù hợp với hồ sơ của bạn. Tự động từ chối câu hỏi ngoài phạm vi học thuật.</p>
+        </div>
+        <button type="button" class="secondary" id="fill-skill-question" hidden>✨ Đối chiếu theo hồ sơ của tôi</button>
+      </header>
       <div id="thesis-chat-prompts" class="chat-prompts" aria-label="Câu hỏi gợi ý"></div>
-      <p id="thesis-chat-status" role="status"></p>
-      <div id="thesis-chat-history" aria-label="Hội thoại"></div>
+      <form id="thesis-chat-form" class="agent-input-bar">
+        <label for="thesis-question" class="sr-only">Câu hỏi về giảng viên, đề tài hoặc hồ sơ của bạn</label>
+        <input id="thesis-question" name="question" required maxlength="1000" placeholder="VD: Hồ sơ của em hợp với giảng viên nào nhất? Hoặc: So sánh TS. Phạm Xuân Lâm và ThS. Nguyễn Hùng Việt">
+        <button class="primary">Hỏi Trợ lý</button>
+      </form>
+      <p id="thesis-chat-status" class="help" role="status"></p>
+      <div id="thesis-chat-history" class="agent-thread" aria-label="Hội thoại"></div>
     </section>
     <noscript>Bật JavaScript để sử dụng không gian khóa luận.</noscript>
   </main>
+  <footer class="portal-footer">UniMatch · Mọi đề xuất AI đều đi kèm giải thích căn cứ và cần giảng viên / trưởng khoa phê duyệt.</footer>
+  <dialog id="confirm-dialog" class="confirm-dialog">
+    <form method="dialog" class="confirm-dialog-body">
+      <h3 id="confirm-dialog-title">Xác nhận thao tác</h3>
+      <p id="confirm-dialog-message"></p>
+      <div class="confirm-dialog-actions">
+        <button value="cancel" class="secondary" type="submit">Hủy</button>
+        <button value="confirm" class="primary" id="confirm-dialog-accept" type="submit">Xác nhận</button>
+      </div>
+    </form>
+  </dialog>
+  <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
   <script type="module" src="./thesis.js"></script>
 </body>
 </html>

@@ -15,6 +15,8 @@
 !database/**
 !configs/
 !configs/**
+!docs/
+!docs/advisors_full_skills.csv
 !assets/
 !assets/student-skills-template.xlsx
 !frontend/

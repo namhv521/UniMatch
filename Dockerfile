@@ -20,6 +20,7 @@ COPY src ./src
 COPY backend ./backend
 COPY database/portal.sql ./database/portal.sql
 COPY configs ./configs
+COPY docs/advisors_full_skills.csv ./docs/advisors_full_skills.csv
 COPY --from=frontend /build/frontend/dist ./frontend/dist
 USER app
 EXPOSE 8000

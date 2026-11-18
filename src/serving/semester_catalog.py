@@ -117,7 +117,7 @@ class CatalogAssistant:
 
 
 def load_catalog(outputs, runtime):
-    from scripts.run_semester_rl import verify_source_audit, verify_suites
+    from src.features.semester_verify import verify_source_audit, verify_suites
 
     outputs = Path(outputs).resolve()
     bundle = outputs / 'semester_rl_20261111_trusted_year_github'

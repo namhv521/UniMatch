@@ -52,7 +52,7 @@ def load_semester_service(run_root, *, inputs=None, runtime_dir=None):
         raise ValueError('completed_external_evaluation_required') from exc
     if external.get('status')!='completed' or external.get('semester_id')!='2025.3':
         raise ValueError('completed_external_evaluation_required')
-    from scripts.run_semester_rl import verify_suites, verify_source_audit
+    from src.features.semester_verify import verify_suites, verify_source_audit
     status, selection = read(training/'status.json'), read(training/'selection.json')
     if digest(training/'status.json') != selection['training_status_sha256']:
         raise ValueError('serving_frozen_selection_status_mismatch')

@@ -3,79 +3,148 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Nhập hồ sơ, chọn giảng viên và so sánh phân bổ UniMatch trên dữ liệu local.">
-  <title>Không gian làm việc · UniMatch</title>
-
+  <meta name="description" content="Nhập hồ sơ Excel/CSV, kiểm tra kỹ năng giảng viên và so sánh 5 thuật toán phân công UniMatch kèm mô phỏng 3D/2D.">
+  <title>Bàn làm việc Phân công &amp; Nghiên cứu · UniMatch</title>
   <link rel="stylesheet" href="./portal.css">
-<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js"}}</script>
+  <script type="importmap">{"imports":{"three":"./vendor/three/three.module.js"}}</script>
 </head>
 <body class="rebuild">
   <a class="skip-link" href="#main">Đi tới nội dung chính</a>
-  <header class="portal-nav workspace-nav"><a class="brand" href="./landing.html"><span>Uni</span>Match</a><nav aria-label="Điều hướng"><a href="./thesis.html">Khóa luận</a><a href="./rebuild.html" aria-current="page">Phân công</a><a href="./dashboard.html">Dashboard</a></nav><button class="secondary" data-logout>Đăng xuất</button></header>
-  <main id="main" class="rebuild-page">
-    <div class="workspace-heading workspace-hero"><div><h1>Phân công giảng viên hướng dẫn</h1><p>Chuẩn bị hồ sơ, chọn giảng viên và khám phá từng đề xuất.</p></div><span id="user-greeting"></span></div>
-    <nav class="workspace-jump" aria-label="Các phần phân công">
-      <a href="#import">Hồ sơ</a>
-      <a href="#advisors">Giảng viên</a>
-      <a href="#results">Kết quả</a>
-      <a href="#simulation">Mô phỏng</a>
+  <div id="demo-bar-slot"></div>
+  <header class="portal-nav workspace-nav">
+    <a class="brand" href="./landing.html"><span class="brand-mark" aria-hidden="true"></span><span>Uni</span>Match</a>
+    <nav aria-label="Điều hướng">
+      <a href="./thesis.html">Khóa luận</a>
+      <a href="./rebuild.html" aria-current="page">Phân công</a>
+      <a href="./dashboard.html">Dashboard</a>
     </nav>
-    <div id="message" role="status" aria-live="polite" tabindex="-1" hidden></div>
+    <div class="nav-user-actions">
+      <span id="user-greeting" class="role-badge"></span>
+      <button class="secondary" data-logout>Đăng xuất</button>
+    </div>
+  </header>
+  <main id="main" class="rebuild-page">
+    <div class="workspace-heading workspace-hero">
+      <div>
+        <span class="hero-eyebrow">Bàn làm việc Điều phối &amp; Đối chứng Thuật toán</span>
+        <h1>So sánh mô hình phân công</h1>
+        <p>Nhập danh sách Excel/CSV, thiết lập giảng viên tham gia và đối chiếu Hungarian, PPO, DQN, Greedy, Random trên cùng ràng buộc.</p>
+      </div>
+    </div>
+    <nav class="workspace-jump" aria-label="Các phần phân công">
+      <a href="#import">1. Nhập Hồ sơ</a>
+      <a href="#advisors">2. Giảng viên &amp; Chỉ tiêu</a>
+      <a href="#rankings">3. Top-K &amp; Giải thích XAI</a>
+      <a href="#results">4. So sánh 5 Thuật toán</a>
+      <a href="#simulation">5. Mô phỏng 3D / 2D</a>
+    </nav>
+    <div id="message" class="status-banner" role="status" aria-live="polite" tabindex="-1" hidden></div>
     <div class="workspace-grid">
       <div class="input-column">
         <section id="import" class="work-section" aria-labelledby="import-title">
-          <header class="section-heading"><div><h2 id="import-title">Hồ sơ sinh viên</h2><p>Tải danh sách sinh viên để bắt đầu.</p></div><button id="template" class="secondary" type="button" disabled>Tải CSV mẫu</button></header>
+          <header class="section-heading">
+            <div>
+              <h2 id="import-title">1. Hồ sơ sinh viên (Excel / CSV)</h2>
+              <p>Hỗ trợ chuẩn hóa tệp `.xlsx` hoặc `.csv`, kiểm tra lỗi theo từng dòng và xuất lại Excel chuẩn.</p>
+            </div>
+            <button id="template" class="secondary" type="button" disabled>Tải CSV mẫu</button>
+          </header>
           <form id="import-form">
-            <label class="file-label" for="csv-file">Chọn Excel hoặc CSV<input id="csv-file" type="file" accept=".xlsx,.csv,text/csv" aria-describedby="workbook-help" disabled required></label>
-            <p id="workbook-help" class="help">Excel cần cột Họ và tên. Thêm Mã sinh viên, Ý tưởng hoặc Mô tả nếu có. Định dạng ô mã sinh viên là văn bản.</p>
-            <div class="import-actions"><span id="file-info" class="help">Chưa chọn file.</span><button id="validate" class="primary" type="submit" disabled>Kiểm tra hồ sơ</button><button id="confirm-import" class="primary" type="button" hidden disabled>Xác nhận danh sách</button></div>
+            <label class="file-label" for="csv-file">
+              <strong>Chọn tệp danh sách sinh viên (.xlsx hoặc .csv)</strong>
+              <span class="help">Excel cần cột Họ và tên. Có thể thêm Mã sinh viên, Ý tưởng đề tài, Mô tả hoặc Kỹ năng.</span>
+              <input id="csv-file" type="file" accept=".xlsx,.csv,text/csv" aria-describedby="workbook-help" disabled required>
+            </label>
+            <p id="workbook-help" class="help">Định dạng ô mã sinh viên dạng Văn bản (Text) để giữ số 0 ở đầu nếu có.</p>
+            <div class="import-actions">
+              <span id="file-info" class="help">Chưa chọn tệp.</span>
+              <button id="validate" class="primary" type="submit" disabled>Kiểm tra hồ sơ</button>
+              <button id="confirm-import" class="primary" type="button" hidden disabled>Xác nhận danh sách</button>
+              <button id="export-workbook" class="secondary" type="button" hidden disabled>Tải Excel chuẩn</button>
+            </div>
           </form>
-          <div id="import-result" class="empty-state" aria-live="polite">Sau khi kiểm tra, lỗi từng dòng và danh sách hồ sơ hợp lệ sẽ xuất hiện ở đây.</div>
-          <button id="export-workbook" class="secondary" type="button" hidden disabled>Tải Excel chuẩn</button>
+          <div id="import-result" class="empty-state" aria-live="polite">Sau khi kiểm tra, lỗi từng dòng và bản xem trước hồ sơ hợp lệ sẽ xuất hiện tại đây.</div>
         </section>
-        <section id="advisors" class="work-section" aria-labelledby="advisors-title">
-          <header class="section-heading"><div><h2 id="advisors-title">Giảng viên tham gia</h2><p>Chọn từ danh mục giảng viên của học kỳ.</p></div><span id="selection-count" class="count-label">0 đã chọn</span></header>
-          <div class="advisor-tools"><label class="search-label">Tìm giảng viên<input id="advisor-search" type="search" placeholder="Nhập tên giảng viên" disabled></label><button id="select-all" class="secondary" type="button" disabled>Chọn tất cả có tín hiệu</button><button id="clear-selection" class="secondary" type="button" disabled>Bỏ chọn</button></div>
-          <fieldset id="advisor-list" disabled><legend class="sr-only">Chọn giảng viên tham gia</legend><p class="empty-state">Kết nối dịch vụ để tải danh mục đã được kiểm chứng.</p></fieldset>
-          <div id="quota-preview" class="quota-preview" aria-live="polite">Nhập hồ sơ và chọn giảng viên để xem quota.</div>
-          <label class="confirmation"><input id="confirm-policy" type="checkbox" disabled><span>Tôi xác nhận danh sách tham gia và quota chia đều để chạy phân bổ.</span></label>
-          <label id="checkpoint-field" class="algorithm-picker" hidden>Checkpoint PPO/DQN<select id="checkpoint-version"></select></label>
-          <div class="main-actions"><button id="recommend" class="secondary" type="button" disabled>Xem top-K phù hợp</button><button id="compare" class="primary" type="button" disabled>Chạy so sánh</button></div>
 
+        <section id="advisors" class="work-section" aria-labelledby="advisors-title">
+          <header class="section-heading">
+            <div>
+              <h2 id="advisors-title">2. Giảng viên tham gia &amp; Chỉ tiêu</h2>
+              <p>Chọn giảng viên hướng dẫn trong học kỳ và kiểm tra phân bổ chỉ tiêu cân bằng.</p>
+            </div>
+            <span id="selection-count" class="count-label">0 đã chọn</span>
+          </header>
+          <div class="advisor-tools">
+            <label class="search-label">Tìm giảng viên<input id="advisor-search" type="search" placeholder="Nhập tên hoặc mã giảng viên..." disabled></label>
+            <button id="select-all" class="secondary" type="button" disabled>Chọn tất cả có tín hiệu</button>
+            <button id="clear-selection" class="secondary" type="button" disabled>Bỏ chọn</button>
+          </div>
+          <fieldset id="advisor-list" disabled>
+            <legend class="sr-only">Chọn giảng viên tham gia</legend>
+            <p class="empty-state">Đang kết nối dịch vụ để tải danh mục giảng viên…</p>
+          </fieldset>
+          <div id="quota-preview" class="quota-preview" aria-live="polite">Nhập hồ sơ và chọn giảng viên để xem dự kiến chỉ tiêu.</div>
+          <label class="confirmation"><input id="confirm-policy" type="checkbox" disabled><span>Tôi xác nhận danh sách giảng viên tham gia và quy tắc chia đều chỉ tiêu để chạy đối chiếu.</span></label>
+          <label id="checkpoint-field" class="algorithm-picker" hidden>Phiên bản Checkpoint RL<select id="checkpoint-version"></select></label>
+          <div class="main-actions">
+            <button id="recommend" class="secondary" type="button" disabled>Xem Top-K &amp; Giải thích XAI</button>
+            <button id="compare" class="primary" type="button" disabled>Chạy so sánh thuật toán</button>
+          </div>
         </section>
       </div>
+
       <aside class="context-panel" aria-labelledby="context-title">
-        <h2 id="context-title">Mô hình &amp; nguồn</h2>
-        <div id="model-status" class="empty-state">Chưa kết nối.</div>
-        <a href="./dashboard.html">Xem quá trình huấn luyện</a>
+        <h2 id="context-title">Mô hình đang phục vụ</h2>
+        <div id="model-status" class="empty-state">Đang kết nối…</div>
+        <a class="button secondary full-width-link" href="./dashboard.html">Xem biểu đồ huấn luyện →</a>
       </aside>
     </div>
+
+    <section id="rankings" class="work-section" aria-labelledby="rankings-title">
+      <header class="section-heading">
+        <div>
+          <h2 id="rankings-title">3. Khuyến nghị Top-K &amp; Giải thích XAI</h2>
+          <p>Xếp hạng độ tương thích cá nhân kèm phân rã thành phần điểm E4 (độc lập với chỉ tiêu toàn khóa).</p>
+        </div>
+        <label class="top-k-label">Số gợi ý<select id="top-k"><option>3</option><option selected>5</option><option>10</option></select></label>
+      </header>
+      <div id="recommendation-result" class="empty-state">Chọn “Xem Top-K &amp; Giải thích XAI” sau khi kiểm tra danh sách sinh viên.</div>
+    </section>
+
     <section id="results" class="work-section result-section" aria-labelledby="results-title">
-      <header class="section-heading"><div><h2 id="results-title">Kết quả so sánh</h2><p>Cùng cohort, danh sách giảng viên và quota cho mọi phương pháp.</p></div><div class="export-actions"><button id="export-json" type="button" class="secondary" disabled>Xuất JSON</button><button id="export-csv" type="button" class="secondary" disabled>Xuất phân bổ CSV</button></div></header>
-      <div id="comparison-result" class="empty-state">Chưa có phân bổ. Hoàn tất hồ sơ và danh sách giảng viên ở trên để chạy so sánh.</div>
+      <header class="section-heading">
+        <div>
+          <h2 id="results-title">4. Kết quả đối chiếu thuật toán</h2>
+          <p>Đánh giá khách quan trên cùng danh sách sinh viên, tập giảng viên và ràng buộc chỉ tiêu.</p>
+        </div>
+        <div class="export-actions">
+          <button id="export-json" type="button" class="secondary" disabled>Xuất JSON</button>
+          <button id="export-csv" type="button" class="secondary" disabled>Xuất phân bổ CSV</button>
+        </div>
+      </header>
+      <div id="comparison-result" class="empty-state">Chưa có lượt chạy so sánh. Hoàn tất bước 1 &amp; 2 ở trên để bắt đầu.</div>
       <div id="allocation-panel" hidden>
-        <label class="algorithm-picker">Xem phân bổ của<select id="result-algorithm"></select></label>
+        <div class="allocation-toolbar">
+          <label class="algorithm-picker">Xem chi tiết phương án<select id="result-algorithm"></select></label>
+        </div>
         <div id="advisor-load-chart"></div>
-        <details id="student-comparison">
-          <summary>So sánh theo sinh viên</summary>
-          <label class="algorithm-picker">Sinh viên<select id="student-comparison-id"></select></label>
+        <details id="student-comparison" class="xai-details-panel">
+          <summary>Đối chiếu kết quả của từng sinh viên qua các thuật toán</summary>
+          <label class="algorithm-picker" style="margin-top:12px">Chọn sinh viên<select id="student-comparison-id"></select></label>
           <div id="student-comparison-chart"></div>
         </details>
         <div id="assignments-table" class="table-scroll"></div>
-
       </div>
     </section>
-    <section id="rankings" class="work-section" aria-labelledby="rankings-title">
-      <header class="section-heading"><div><h2 id="rankings-title">Top-K phù hợp</h2><p>Khuyến nghị theo bằng chứng; chưa phải kết quả phân công.</p></div><label class="top-k-label">Số gợi ý<select id="top-k"><option>3</option><option selected>5</option><option>10</option></select></label></header>
-      <div id="recommendation-result" class="empty-state">Chọn “Xem top-K phù hợp” sau khi kiểm tra hồ sơ.</div>
-    </section>
+
     <section id="simulation" class="work-section" aria-labelledby="simulation-title">
-      <h2 id="simulation-title">Phát lại quá trình phân công</h2>
+      <h2 id="simulation-title">5. Phát lại quá trình ra quyết định (3D Khuôn viên &amp; 2D Chi tiết)</h2>
       <div id="allocation-player"></div>
     </section>
-    <footer class="workspace-footer">UniMatch · Đề xuất cần được người phụ trách xem xét trước khi xác nhận phân công.</footer>
+
+    <footer class="workspace-footer">UniMatch · Mọi phương án mô hình đều mang tính tham khảo hỗ trợ quyết định và cần người phụ trách phê duyệt.</footer>
   </main>
-  <noscript>Không gian phân bổ cần JavaScript để kiểm tra CSV và kết nối dịch vụ.</noscript>
+  <noscript>Không gian phân bổ cần JavaScript để kiểm tra dữ liệu và kết nối dịch vụ.</noscript>
   <script type="module" src="./rebuild-app.js"></script>
 </body>
 </html>

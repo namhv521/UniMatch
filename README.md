@@ -1,43 +1,72 @@
-# UniMatch
+# UniMatch — Nền tảng Điều phối & Tư vấn Khóa luận Tốt nghiệp End-to-End
 
-UniMatch là đồ án hỗ trợ phân công sinh viên với giảng viên hướng dẫn khóa luận. Hệ thống dùng thông tin đề tài, hồ sơ chuyên môn của giảng viên và chỉ tiêu hướng dẫn để tạo các phương án phân công. Người phụ trách có thể xem từng lựa chọn và đối chiếu các phương án trước khi quyết định.
+UniMatch là hệ thống hỗ trợ phân công và quản trị vòng đời khóa luận tốt nghiệp toàn trình (End-to-End) cho Sinh viên, Giảng viên hướng dẫn và Trưởng khoa / Điều phối viên. Hệ thống kết hợp **Chuẩn hóa hồ sơ học thuật lai (Hybrid LLM + Deterministic Normalizer)**, **Trợ lý AI học vụ RAG 4 lớp Guardrails**, và **Tối ưu hóa phân công đa thuật toán** (**Hungarian**, **Maskable PPO**, **Action-Masked Double DQN**) trên tập hồ sơ chuyên môn đầy đủ của 17 giảng viên.
 
-## Portal hỗ trợ gì?
+---
 
-- **Chuẩn bị hồ sơ** từ Excel hoặc CSV, xem lỗi theo dòng, xác nhận danh sách sinh viên và xuất workbook chuẩn hóa.
-- **Tra cứu giảng viên** theo nội dung đề tài và hồ sơ chuyên môn đã duyệt. Kết quả gợi ý theo từng sinh viên và kết quả phân công cả nhóm được hiển thị riêng.
-- **So sánh phương án phân công** trên cùng danh sách sinh viên, giảng viên và quota. Kết quả có bảng phân bổ, biểu đồ, mô phỏng 3D từng quyết định và dữ liệu xuất để xem lại.
-- **Xem kết quả nghiên cứu** qua báo cáo huấn luyện và đánh giá đã lưu. Portal phục vụ mô hình đã đóng gói và chạy suy luận khi người dùng yêu cầu phân công.
+## Khởi chạy nhanh Chế độ Demo Bảo vệ Khóa luận (1-Click)
 
-## Bài toán và phương pháp
+```bash
+# Cài đặt thư viện frontend & build giao diện tĩnh (nếu chạy lần đầu)
+npm --prefix frontend run build
 
-UniMatch biểu diễn mỗi đợt phân công bằng danh sách sinh viên, điểm tương thích với giảng viên, điều kiện ghép hợp lệ và chỉ tiêu còn lại. Điểm tương thích đến từ nội dung đề tài và hồ sơ chuyên môn. Khi hồ sơ sinh viên thiếu ý tưởng, hệ thống dùng quota còn lại để ghép và để điểm tương thích ở trạng thái chưa xác định.
+# Khởi chạy máy chủ Demo Bảo vệ Khóa luận (tự động nạp 17 GV + 6 RL checkpoints + dữ liệu mẫu 5 vai trò)
+python scripts/run_demo.py --reset --open-browser
+```
 
-Hệ thống so sánh **Hungarian**, **Greedy**, **Random**, **Maskable PPO** và **Masked DQN**. Hungarian là phương pháp đối chiếu tối ưu tổng điểm trong bài toán đã mô hình hóa. Greedy và Random cho thêm hai mốc so sánh. PPO và DQN ra quyết định tuần tự với mặt nạ hành động để lọc lựa chọn vi phạm ràng buộc.
+Sau khi chạy, mở `http://127.0.0.1:8767/login.html` hoặc sử dụng **Thanh chuyển nhanh vai trò Demo** ngay trên đỉnh màn hình (`UNIMATCH_DEMO_MODE=1`, tự động vô hiệu hóa trên môi trường `production`):
+- **Sinh viên (`sv1@demo.unimatch.edu.vn`)**: Đã làm khảo sát năng lực, chuẩn hóa giọng văn đề tài học thuật, xem thẻ giải thích XAI, tra cứu danh bạ giảng viên và hỏi đáp Trợ lý RAG.
+- **Sinh viên mới (`sv2@demo.unimatch.edu.vn`)**: Trải nghiệm trực tiếp Interactive Quiz Cards và chuẩn hóa hồ sơ từ đầu.
+- **Giảng viên (`lam.px@demo.unimatch.edu.vn`, `viet.nh@demo.unimatch.edu.vn`)**: Xem hồ sơ sinh viên đã chuẩn hóa học thuật + điểm tương thích E4, duyệt/từ chối hướng dẫn, nhận xét đề cương / giữa kỳ / bản cuối và chấm kết quả hướng dẫn cuối kỳ.
+- **Trưởng khoa (`dean@demo.unimatch.edu.vn`)**: Quản lý danh sách CSV sinh viên & ma trận kỹ năng CSV giảng viên công bằng, khóa đăng ký, đối sánh **PPO vs DQN vs Hungarian**, xem phát lại Sân khấu 3D + Ma trận 2D, công bố chính thức, xuất `.xlsx` / `.csv` và gói phản hồi Continual RL.
 
-## Dữ liệu và đánh giá
+---
 
-| Phiên bản | Tập theo kỳ | Vai trò |
-| --- | --- | --- |
-| V1 | 2024 | Giai đoạn huấn luyện đầu |
-| V2 | 2025.1 | Giai đoạn huấn luyện tiếp theo |
-| V3 | 2025.2 | Giai đoạn huấn luyện cuối |
-| Test ngoài | 2025.3 | Đánh giá sau khi đóng băng checkpoint |
+## Các phân hệ cốt lõi End-to-End
 
-Danh mục Strict có GitHub gồm sáu checkpoint, tương ứng PPO và DQN ở round 4 của V1, V2 và V3. Báo cáo kỳ 2025.3 dùng 19 hồ sơ sinh viên để đối chiếu điểm, độ bao phủ và vi phạm ràng buộc. Đây là đánh giá hồi cứu trên dữ liệu tài liệu. Điểm số mô tả phương án trong phạm vi bộ dữ liệu và cần được người phụ trách xem xét khi áp dụng vào thực tế.
+1. **Khảo sát năng lực & Chuẩn hóa giọng văn học thuật (`src/serving/profile_normalizer.py`)**:
+   - Sinh viên thực hiện trắc nghiệm năng lực theo vị trí chuyên môn (`roles-v2`) và nhập ý tưởng đề tài tự do (kể cả văn nói, từ lóng hoặc pha trộn thuật ngữ tiếng Việt - tiếng Anh).
+   - Bộ chuẩn hóa lai chuyển đổi văn phong tự do sang **Hồ sơ đề tài học thuật chuẩn** (Tên đề tài chuẩn hóa, Tóm tắt mục tiêu & phạm vi phương pháp, Nhãn kỹ năng chuẩn Taxonomy), hiển thị đối chiếu *Trước / Sau* và gửi trực tiếp sang Giảng viên cùng mô hình phân công.
+2. **Ma trận Kỹ năng Giảng viên Công bằng (`docs/advisors_full_skills.csv`, `backend/app/advisor_skills.py`)**:
+   - Chuẩn hóa đầy đủ 8 nhóm năng lực & tóm tắt hướng nghiên cứu cho toàn bộ **17/17 giảng viên**, khắc phục triệt để hiện tượng thiên lệch điểm tương thích đối với các giảng viên công bố công trình thuần tiếng Việt. Hỗ trợ Trưởng khoa xuất / nhập cập nhật qua CSV.
+3. **Trợ lý AI Học vụ RAG & 4 Lớp Guardrails (`src/serving/rag_agent.py`)**:
+   - Kết hợp truy hồi lai **BM25 + E4 Cosine Embedding + Reciprocal Rank Fusion (RRF)** trên nguồn công bố học thuật đã kiểm chứng và hồ sơ kỹ năng giảng viên.
+   - **4 lớp Guardrails nghiêm ngặt**: (1) Chống Prompt Injection & dò thông tin cá nhân chéo (PII), (2) Chặn gian lận học thuật (viết hộ khóa luận / làm bài tập hộ), (3) Bộ lọc phạm vi nghiêm ngặt từ chối 100% câu hỏi ngoài lề, (4) Trả lời đúng trọng tâm kèm trích dẫn nguồn xác thực.
+4. **Tối ưu hóa Phân công Đa mô hình & Hậu phân công (`backend/app/thesis.py`, `backend/app/thesis_intake.py`)**:
+   - Đối sánh trực tiếp **Hungarian**, **Maskable PPO** và **Masked Double DQN** có tôn trọng giảng viên đã nhận hướng dẫn trước, nguyện vọng xếp hạng của sinh viên và hạn ngạch (quota) tùy chỉnh.
+   - Theo dõi sau công bố: nộp & duyệt 3 mốc (**Đề cương**, **Giữa kỳ**, **Bản cuối**), đánh giá kết quả hướng dẫn cuối kỳ và xuất dữ liệu ẩn danh phục vụ **Continual RL (`R4`)**.
 
-Dữ liệu gốc, hồ sơ sinh viên, thông tin kết nối và các gói trọng số được lưu riêng. Repository chứa mã, hợp đồng dữ liệu, mẫu nhập và tài liệu nghiên cứu.
+---
 
-## Cấu trúc repository
+## Dữ liệu & Huấn luyện Học tăng cường (Continual RL)
+
+| Phiên bản | Kỳ | Train | Validation | Test ngoài |
+| --- | --- | ---: | ---: | ---: |
+| V1 | 2024 | 87 | 19 | |
+| V2 | 2025.1 | 46 | 16 | |
+| V3 | 2025.2 | 45 | 11 | |
+| Test ngoài | 2025.3 | | | 19 |
+
+Mỗi chuỗi mô hình có 4 vòng kế thừa checkpoint nối tiếp (`R1 -> R4`) trên không gian trạng thái 420 chiều và 17 giảng viên. Danh mục Strict gồm 6 checkpoint đã khóa SHA-256 (`PPO` và `DQN` qua `V1`, `V2`, `V3`). Chi tiết xem tại [Tóm tắt nghiên cứu RL](docs/research/rl/summary.md).
+
+---
+
+## Cấu trúc Repository
 
 | Đường dẫn | Nội dung |
 | --- | --- |
-| [frontend/](frontend/) | Giao diện HTML, CSS, JavaScript và mô phỏng 3D |
-| [backend/](backend/) | API FastAPI, xác thực, lưu hồ sơ và kết quả, nạp gói mô hình |
-| [src/](src/) | Pipeline dữ liệu, đặc trưng, ràng buộc, baseline, RL, đánh giá và suy luận |
-| [scripts/](scripts/) | Công cụ chuẩn bị dữ liệu, chạy thí nghiệm và phát hành mô hình |
-| [configs/](configs/) và [database/](database/) | Taxonomy, hợp đồng cấu hình và lược đồ lưu trữ |
-| [tests/](tests/) | Kiểm thử hợp đồng dữ liệu, thuật toán, API và lưu trữ |
-| [docs/](docs/) | Tài liệu sản phẩm, vận hành, nghiên cứu và lưu trữ |
+| [frontend/](frontend/) | Giao diện Vanilla HTML/CSS/ES Modules (Design System v2), Sân khấu Three.js 3D + 2D Replay |
+| [backend/](backend/) | API FastAPI, xác thực OAuth/Email/Demo, chuẩn hóa hồ sơ, RAG Agent, điều phối & hậu phân công |
+| [src/](src/) | Pipeline dữ liệu, đặc trưng E4, chuẩn hóa học thuật, RAG Guardrails, RL (PPO/DQN) & suy luận |
+| [scripts/](scripts/) | Bộ khởi chạy Demo bảo vệ (`run_demo.py`), huấn luyện RL theo kỳ và kiểm định gói mô hình |
+| [configs/](configs/) & [database/](database/) | Từ điển Taxonomy chuẩn và lược đồ cơ sở dữ liệu SQLite / PostgreSQL |
+| [docs/](docs/) | Đặc tả sản phẩm, hồ sơ kỹ năng chuẩn 17 giảng viên (`advisors_full_skills.csv`) và tài liệu nghiên cứu |
+| [tests/](tests/) | Bộ kiểm thử tự động Backend, Frontend, Guardrails RAG, Chuẩn hóa hồ sơ và Vòng đời khóa luận |
 
-[Chỉ mục tài liệu UniMatch](docs/README.md)
+## Kiểm thử chất lượng
+
+```bash
+npm --prefix frontend run check && npm --prefix frontend run build
+node tests/rebuild/test_thesis_frontend.mjs
+pytest tests/rebuild -q
+```

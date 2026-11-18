@@ -47,7 +47,12 @@ Thumbs.db
 docs/*
 !docs/unimatch_web_prd.md
 !docs/unimatch_web_spec.md
+!docs/advisors_full_skills.csv
 tests/*
 !tests/rebuild/
 tests/rebuild/*
 !tests/rebuild/test_thesis_portal.py
+!tests/rebuild/test_thesis_history.py
+!tests/rebuild/test_thesis_extensions.py
+!tests/rebuild/test_thesis_frontend.mjs
+!tests/rebuild/test_e2e_enhancements.py

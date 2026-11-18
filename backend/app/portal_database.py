@@ -1,6 +1,7 @@
 """Small shared SQL store: SQLite locally, PostgreSQL for production."""
 import json
 import os
+import re
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -8,6 +9,13 @@ from pathlib import Path
 from src.data_pipeline.review_decisions import record_hash
 
 ROOT = Path(__file__).resolve().parents[2]
+_SQL_STRING_OR_PARAM = re.compile(r"'(?:''|[^'])*'|\?")
+
+
+def _to_postgres_sql(query: str) -> str:
+    """Safely translate SQLite `?` placeholders into psycopg `%s` without corrupting literals."""
+    escaped = query.replace('%', '%%')
+    return _SQL_STRING_OR_PARAM.sub(lambda m: '%s' if m.group(0) == '?' else m.group(0), escaped)
 
 
 def database_location(default=None):
@@ -20,27 +28,53 @@ class Connection:
         self.connection, self.postgres = connection, postgres
 
     def execute(self, query, params=()):
-        return self.connection.execute(query.replace('?', '%s') if self.postgres else query, params)
+        sql = _to_postgres_sql(query) if self.postgres else query
+        return self.connection.execute(sql, params)
 
     def executescript(self, script):
         for statement in script.split(';'):
-            if statement.strip():
-                self.execute(statement)
+            cleaned = '\n'.join(
+                line for line in statement.splitlines()
+                if not line.lstrip().startswith('--')
+            ).strip()
+            if cleaned:
+                self.execute(cleaned)
 
 
 class Database:
     def __init__(self, location):
         self.location = str(location)
         self.postgres = self.location.startswith(('postgres://', 'postgresql://'))
-        if not self.postgres:
+        self._pool = None
+        if self.postgres:
+            try:
+                from psycopg.rows import dict_row
+                from psycopg_pool import ConnectionPool
+                self._pool = ConnectionPool(
+                    self.location,
+                    min_size=1,
+                    max_size=6,
+                    kwargs={'connect_timeout': 15, 'row_factory': dict_row},
+                    configure=lambda conn: conn.execute('SET search_path TO unimatch_portal'),
+                )
+            except ImportError:
+                self._pool = None
+        else:
             Path(self.location).parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
             if self.postgres:
                 db.execute('CREATE SCHEMA IF NOT EXISTS unimatch_portal')
+                db.execute('SET search_path TO unimatch_portal')
             db.executescript((ROOT/'database/portal.sql').read_text(encoding='utf-8'))
 
     @contextmanager
     def connect(self):
+        if self.postgres and self._pool is not None:
+            with self._pool.connection() as connection:
+                connection.execute('SET search_path TO unimatch_portal')
+                with connection:
+                    yield Connection(connection, True)
+            return
         if self.postgres:
             import psycopg
             from psycopg.rows import dict_row
@@ -49,6 +83,7 @@ class Database:
         else:
             connection = sqlite3.connect(self.location, timeout=15)
             connection.row_factory = sqlite3.Row
+            connection.execute('PRAGMA foreign_keys = ON')
         try:
             with connection:
                 yield Connection(connection, self.postgres)

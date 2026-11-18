@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.features.fresh_suite import digest, write_json
 from src.features.semester_suite import VERSIONS, prepare_suites
+from src.features.semester_verify import verify_source_audit, verify_suites
 from src.rl.model_retention import create_retention
 from src.rl.nested_learning import decode_problem, run_round, validate_round, verify_round
 

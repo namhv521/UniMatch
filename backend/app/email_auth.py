@@ -6,6 +6,7 @@ import os
 import re
 import secrets
 import threading
+import time
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -50,6 +51,17 @@ def insert_account(db, email, name, encoded, *, role='student', activation=None,
                       (email, user_id, encoded, activation, role, advisor_id, advisor_semester)).fetchone()
 
 
+def issue_password_reset(store, email):
+    code = secrets.token_urlsafe(12)
+    with store.connect() as db:
+        if not db.execute('SELECT 1 FROM email_accounts WHERE email=?', (email,)).fetchone():
+            return None
+        db.execute('INSERT INTO email_password_resets(email,token_hash,expires) VALUES (?,?,?) '
+                   'ON CONFLICT(email) DO UPDATE SET token_hash=excluded.token_hash,expires=excluded.expires',
+                   (email, hashlib.sha256(code.encode()).hexdigest(), time.time() + 1800))
+    return code
+
+
 def seed_accounts(store):
     entries = json.loads(os.environ.get('UNIMATCH_EMAIL_ACCOUNT_SEED', '[]') or '[]')
     if not isinstance(entries, list):
@@ -78,13 +90,31 @@ def seed_accounts(store):
                            advisor_semester=semester)
 
 
-def install_email_auth(router, store, check_origin, set_session_cookie):
-    from .portal import AuthStartRateLimiter, hashed
+def install_email_auth(router, store, check_origin, set_session_cookie, authenticated):
+    from .portal import AuthStartRateLimiter, client_address, hashed
     limiter = AuthStartRateLimiter(12, 60)
     seed_accounts(store)
 
     def perform(action, payload):
         email = normalized_email(payload.get('email'))
+        if action == 'reset':
+            code = payload.get('reset_code')
+            if not isinstance(code, str) or not 1 <= len(code) <= 128:
+                raise HTTPException(401, 'invalid_reset_code')
+            new_password = valid_password(payload.get('new_password'), new=True)
+            updated = password_hash(new_password)
+            with store.connect() as db:
+                reset = db.execute('DELETE FROM email_password_resets WHERE email=? AND token_hash=? AND expires>? '
+                                   'RETURNING email',
+                                   (email, hashlib.sha256(code.encode()).hexdigest(), time.time())).fetchone()
+                if reset is None:
+                    raise HTTPException(401, 'invalid_reset_code')
+                account = db.execute('SELECT user_id FROM email_accounts WHERE email=?', (email,)).fetchone()
+                db.execute('UPDATE email_accounts SET password_hash=?,activation_hash=NULL WHERE email=?',
+                           (updated, email))
+                db.execute('DELETE FROM sessions WHERE user_id=?', (account['user_id'],))
+                user = db.execute('SELECT name FROM users WHERE id=?', (account['user_id'],)).fetchone()
+            return set_session_cookie(JSONResponse({'ok': True}), store.create_session('email', email, user['name']))
         password = valid_password(payload.get('password'), new=action == 'register')
         if action == 'register':
             name = payload.get('name')
@@ -131,10 +161,10 @@ def install_email_auth(router, store, check_origin, set_session_cookie):
 
     @router.post('/api/auth/email/{action}')
     async def email_auth(action: str, request: Request):
-        if action not in ('register', 'login', 'activate'):
+        if action not in ('register', 'login', 'activate', 'reset'):
             raise HTTPException(404, 'unknown_email_auth_action')
         check_origin(request)
-        client_ip = request.client.host if request.client else 'unknown'
+        client_ip = client_address(request)
         if not limiter.allow(client_ip):
             raise HTTPException(429, 'email_auth_rate_limited')
         body = bytearray()
@@ -149,3 +179,32 @@ def install_email_auth(router, store, check_origin, set_session_cookie):
         if not isinstance(payload, dict):
             raise HTTPException(400, 'invalid_json')
         return await run_in_threadpool(bounded, action, payload)
+
+    recovery_limiter = AuthStartRateLimiter(5, 60)
+
+    @router.post('/api/auth/recovery-code')
+    async def recovery_code(request: Request):
+        check_origin(request)
+        user = authenticated(request)
+        if user['role'] != 'dean':
+            raise HTTPException(403, 'role_required')
+        client_ip = client_address(request)
+        if not recovery_limiter.allow(client_ip):
+            raise HTTPException(429, 'email_auth_rate_limited')
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > 8192:
+                raise HTTPException(413, 'request_size_limit')
+            body.extend(chunk)
+        try:
+            payload = json.loads(body)
+        except (ValueError, UnicodeError):
+            raise HTTPException(400, 'invalid_json') from None
+        if not isinstance(payload, dict):
+            raise HTTPException(400, 'invalid_json')
+        email = normalized_email(payload.get('email'))
+        code = await run_in_threadpool(issue_password_reset, store, email)
+        if code is None:
+            raise HTTPException(404, 'email_account_not_found')
+        return JSONResponse({'email': email, 'code': code, 'expires_in': 1800},
+                            headers={'Cache-Control': 'private, no-store'})

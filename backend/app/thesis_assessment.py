@@ -82,14 +82,32 @@ def score(survey, answers, bank, version, *, max_level):
     return dict(version=version, survey=survey, answers=answers, skills=skills)
 
 
-def scoring_row(user_id, profile):
+def scoring_row(user_id, profile, dossier=None):
+    base_title = ''
+    extra_tags = []
+    extra_keywords = []
+    if isinstance(dossier, dict):
+        base_title = ' '.join(filter(None, [dossier.get('formal_title', ''), dossier.get('formal_summary', '')])).strip()
+        tax_tags = dossier.get('taxonomy_tags') or {}
+        if isinstance(tax_tags, dict):
+            extra_tags = list(tax_tags.get('topic_tags', [])) + list(tax_tags.get('research_domain_tags', []))
+            for values in tax_tags.values():
+                if isinstance(values, list):
+                    extra_keywords.extend(v.replace('_', ' ') for v in values)
+        for item in dossier.get('normalized_skills') or []:
+            if isinstance(item, dict) and item.get('label'):
+                extra_keywords.append(item['label'])
+
     if profile.get('version') == ASSESSMENT_VERSION:
-        roles = profile['roles']
+        roles = list(dict.fromkeys(list(profile['roles']) + extra_tags))
         strengths = [skill['id'] for skill in profile['skills'] if skill['status'] in ('strong', 'demonstrated')]
-        terms = [term for key in roles for term in TRACKS[key]['keywords']]
-        terms += [term for key in strengths for term in profile['tools'][key]]
-        return {'student_id': user_id, 'thesis_title': '', 'topic_tags': ';'.join(roles),
+        terms = [term for key in profile['roles'] if key in TRACKS for term in TRACKS[key]['keywords']]
+        terms += [term for key in strengths for term in profile['tools'].get(key, [])]
+        terms += extra_keywords
+        return {'student_id': user_id, 'thesis_title': base_title, 'topic_tags': ';'.join(roles),
                 'thesis_keywords': ';'.join(dict.fromkeys(terms))}
     tags = [skill['id'] for skill in profile['skills'] if skill['status'] != 'unassessed']
-    return {'student_id': user_id, 'thesis_title': '', 'topic_tags': ';'.join(tags),
-            'thesis_keywords': ';'.join(skill['label'] for skill in profile['skills'] if skill['id'] in tags)}
+    merged_tags = list(dict.fromkeys(tags + extra_tags))
+    kw = [skill['label'] for skill in profile['skills'] if skill['id'] in tags] + extra_keywords
+    return {'student_id': user_id, 'thesis_title': base_title, 'topic_tags': ';'.join(merged_tags),
+            'thesis_keywords': ';'.join(dict.fromkeys(kw))}

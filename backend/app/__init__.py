@@ -1,10 +1,10 @@
+"""UniMatch FastAPI application package."""
 __all__ = ["app", "create_app"]
 
 
 def __getattr__(name):
-    """Preserve legacy exports without importing legacy serving for additive apps."""
+    """Expose active rebuild/assistant app factories without importing retired V1 modules."""
     if name in __all__:
-        from . import main
-        return getattr(main, name)
+        from . import rebuild_assistant_api
+        return getattr(rebuild_assistant_api, name)
     raise AttributeError(name)
-
