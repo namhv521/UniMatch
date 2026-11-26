@@ -7,7 +7,7 @@ import hashlib
 import json
 import shutil
 import uuid
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -77,7 +77,7 @@ def _read_bound_phase(output, number, artifact):
 
 
 def _headers(entity):
-    with (ROOT / f'docs/{entity}_import.csv').open(encoding='utf-8-sig', newline='') as stream:
+    with (ROOT / f'configs/data/{entity}_import.csv').open(encoding='utf-8-sig', newline='') as stream:
         return next(csv.reader(stream))
 
 

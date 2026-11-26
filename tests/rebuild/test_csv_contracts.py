@@ -39,7 +39,7 @@ def csv_file(path, entity='students', rows=None, *, headers=None, bom=True):
 def test_headers_match_supplied_templates_and_models_generate_schema(entity):
     module = contract()
     schema = module.export_json_schema(entity)
-    template = Path(__file__).resolve().parents[2] / f'docs/{entity}_import.csv'
+    template = Path(__file__).resolve().parents[2] / f'configs/data/{entity}_import.csv'
     with template.open(encoding='utf-8-sig', newline='') as stream:
         headers = next(csv.reader(stream))
     assert schema['x-csv-headers'] == headers

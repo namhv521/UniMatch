@@ -64,7 +64,7 @@ class _LexicalPipeline:
 def e2e_env(tmp_path, monkeypatch):
     taxonomy = load_taxonomy(ROOT / 'configs' / 'data' / 'taxonomy_v1.yaml')
     csv_skills = load_default_skill_map()
-    # Build 4 real NEU advisor identities from docs/advisors_full_skills.csv
+    # Build 4 real NEU advisor identities from configs/data/advisors_full_skills.csv
     picked_ids = [
         'fit_89870b78c68a271f49b9',  # TS PHẠM XUÂN LÂM (RL / RecSys / Web)
         'fit_5a04416402925947eef7',  # ThS. NGUYỄN HÙNG VIỆT (NLP / LLM / CV)

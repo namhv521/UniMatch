@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone

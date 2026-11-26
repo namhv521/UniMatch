@@ -44,12 +44,12 @@ def seal_phase(output, number, artifact, records, **metadata):
 def workflow(tmp_path, monkeypatch):
     project = tmp_path / 'technical-project'
     for entity, headers in HEADERS.items():
-        path = project / f'docs/{entity}_import.csv'
+        path = project / f'configs/data/{entity}_import.csv'
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open('w', encoding='utf-8-sig', newline='') as stream:
             csv.writer(stream).writerow(headers)
     configs = project / 'configs/data'
-    configs.mkdir(parents=True)
+    configs.mkdir(parents=True, exist_ok=True)
     taxonomy_path = configs / 'taxonomy_v1.yaml'
     taxonomy_path.write_text("schema_version: '1.0'\ntaxonomy_version: '1.0'\ngroups:\n  programming_languages:\n    python:\n      aliases: [Python]\n", encoding='utf-8')
     for name in ('feature_allowlist.yaml', 'feature_excluded.yaml'):

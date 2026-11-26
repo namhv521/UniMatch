@@ -4,7 +4,6 @@ from __future__ import annotations
 import copy
 import ctypes
 import importlib.metadata
-import json
 import os
 import random
 import time

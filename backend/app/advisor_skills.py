@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from src.data_pipeline.normalization import load_taxonomy, normalize_mentions
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_SKILLS_CSV = ROOT / 'docs/advisors_full_skills.csv'
+DEFAULT_SKILLS_CSV = ROOT / 'configs/data/advisors_full_skills.csv'
 TAXONOMY_PATH = ROOT / 'configs/data/taxonomy_v1.yaml'
 
 SKILL_GROUP_TO_TAXONOMY = {

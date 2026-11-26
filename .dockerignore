@@ -2,9 +2,7 @@
 # history never enter the Docker build context.
 **
 !Dockerfile
-!requirements.txt
 !requirements-production.txt
-!run_dashboard.py
 !src/
 !src/**
 !backend/
@@ -15,10 +13,6 @@
 !database/**
 !configs/
 !configs/**
-!docs/
-!docs/advisors_full_skills.csv
-!assets/
-!assets/student-skills-template.xlsx
 !frontend/
 !frontend/package.json
 !frontend/build.mjs

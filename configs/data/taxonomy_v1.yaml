@@ -1,7 +1,6 @@
 schema_version: '1.0'
 taxonomy_version: '1.0'
 status: draft_pending_owner_review
-source_contract: docs/UniMatch_Feature_Data_Dictionary.md
 semantics: Mentions identify source concepts only; they do not prove personal skill, expertise proficiency or supervision eligibility.
 normalization: Unicode NFC for matching; preserve original text and offsets.
 stopwords: [ai, ml, r]

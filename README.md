@@ -27,7 +27,7 @@ Sau khi chạy, mở `http://127.0.0.1:8767/login.html` hoặc sử dụng **Tha
 1. **Khảo sát năng lực & Chuẩn hóa giọng văn học thuật (`src/serving/profile_normalizer.py`)**:
    - Sinh viên thực hiện trắc nghiệm năng lực theo vị trí chuyên môn (`roles-v2`) và nhập ý tưởng đề tài tự do (kể cả văn nói, từ lóng hoặc pha trộn thuật ngữ tiếng Việt - tiếng Anh).
    - Bộ chuẩn hóa lai chuyển đổi văn phong tự do sang **Hồ sơ đề tài học thuật chuẩn** (Tên đề tài chuẩn hóa, Tóm tắt mục tiêu & phạm vi phương pháp, Nhãn kỹ năng chuẩn Taxonomy), hiển thị đối chiếu *Trước / Sau* và gửi trực tiếp sang Giảng viên cùng mô hình phân công.
-2. **Ma trận Kỹ năng Giảng viên Công bằng (`docs/advisors_full_skills.csv`, `backend/app/advisor_skills.py`)**:
+2. **Ma trận Kỹ năng Giảng viên Công bằng (`configs/data/advisors_full_skills.csv`, `backend/app/advisor_skills.py`)**:
    - Chuẩn hóa đầy đủ 8 nhóm năng lực & tóm tắt hướng nghiên cứu cho toàn bộ **17/17 giảng viên**, khắc phục triệt để hiện tượng thiên lệch điểm tương thích đối với các giảng viên công bố công trình thuần tiếng Việt. Hỗ trợ Trưởng khoa xuất / nhập cập nhật qua CSV.
 3. **Trợ lý AI Học vụ RAG & 4 Lớp Guardrails (`src/serving/rag_agent.py`)**:
    - Kết hợp truy hồi lai **BM25 + E4 Cosine Embedding + Reciprocal Rank Fusion (RRF)** trên nguồn công bố học thuật đã kiểm chứng và hồ sơ kỹ năng giảng viên.
@@ -47,7 +47,7 @@ Sau khi chạy, mở `http://127.0.0.1:8767/login.html` hoặc sử dụng **Tha
 | V3 | 2025.2 | 45 | 11 | |
 | Test ngoài | 2025.3 | | | 19 |
 
-Mỗi chuỗi mô hình có 4 vòng kế thừa checkpoint nối tiếp (`R1 -> R4`) trên không gian trạng thái 420 chiều và 17 giảng viên. Danh mục Strict gồm 6 checkpoint đã khóa SHA-256 (`PPO` và `DQN` qua `V1`, `V2`, `V3`). Chi tiết xem tại [Tóm tắt nghiên cứu RL](docs/research/rl/summary.md).
+Mỗi chuỗi mô hình có 4 vòng kế thừa checkpoint nối tiếp (`R1 -> R4`) trên không gian trạng thái 420 chiều và 17 giảng viên. Danh mục Strict gồm 6 checkpoint đã khóa SHA-256 (`PPO` và `DQN` qua `V1`, `V2`, `V3`).
 
 ---
 
@@ -59,8 +59,7 @@ Mỗi chuỗi mô hình có 4 vòng kế thừa checkpoint nối tiếp (`R1 -> 
 | [backend/](backend/) | API FastAPI, xác thực OAuth/Email/Demo, chuẩn hóa hồ sơ, RAG Agent, điều phối & hậu phân công |
 | [src/](src/) | Pipeline dữ liệu, đặc trưng E4, chuẩn hóa học thuật, RAG Guardrails, RL (PPO/DQN) & suy luận |
 | [scripts/](scripts/) | Bộ khởi chạy Demo bảo vệ (`run_demo.py`), huấn luyện RL theo kỳ và kiểm định gói mô hình |
-| [configs/](configs/) & [database/](database/) | Từ điển Taxonomy chuẩn và lược đồ cơ sở dữ liệu SQLite / PostgreSQL |
-| [docs/](docs/) | Đặc tả sản phẩm, hồ sơ kỹ năng chuẩn 17 giảng viên (`advisors_full_skills.csv`) và tài liệu nghiên cứu |
+| [configs/](configs/) & [database/](database/) | Từ điển Taxonomy chuẩn, hồ sơ kỹ năng giảng viên (`advisors_full_skills.csv`) và lược đồ cơ sở dữ liệu SQLite / PostgreSQL |
 | [tests/](tests/) | Bộ kiểm thử tự động Backend, Frontend, Guardrails RAG, Chuẩn hóa hồ sơ và Vòng đời khóa luận |
 
 ## Kiểm thử chất lượng

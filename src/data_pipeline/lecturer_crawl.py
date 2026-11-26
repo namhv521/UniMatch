@@ -9,7 +9,7 @@ import shutil
 import time
 import unicodedata
 import uuid
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError
