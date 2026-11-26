@@ -4,7 +4,7 @@
 
 # UniMatch
 
-**Nền tảng hỗ trợ Khóa luận Tốt nghiệp **
+** Nền tảng hỗ trợ Khóa luận Tốt nghiệp **
 
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](backend/app/production.py)
