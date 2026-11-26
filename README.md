@@ -9,7 +9,6 @@
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](backend/app/production.py)
 [![RL](https://img.shields.io/badge/RL-Maskable%20PPO%20%7C%20Masked%20DQN-EE4C2C?logo=pytorch&logoColor=white)](src/rl/)
-[![Tests](https://img.shields.io/badge/Tests-600%20passed%20(rebuild)-2EA44F)](tests/rebuild/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 </div>
